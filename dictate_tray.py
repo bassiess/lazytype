@@ -773,8 +773,10 @@ def _tk_syms_to_spec(syms):
 
 def _keypicker(tk, parent, label, initial):
     """Druk-op-een-toets widget. Klik 'Wijzig…' → druk combo → sla op.
-    Vervangt de dropdown voor sneltoetsen in Instellingen en onboarding."""
+    Op macOS: gebruik dropdown (AppKit-conflict met Tkinter event-capture → crash)."""
     initial = initial or HOTKEY_CHOICES[0][1]
+    if IS_MAC:
+        return _dropdown(tk, parent, label, HOTKEY_CHOICES, initial)
     val = {"v": initial}
     tk.Label(parent, text=label, bg=UI_PAPER, fg=UI_INK, font=UI_FONT,
              anchor="w").pack(fill="x", padx=18, pady=(10, 2))
@@ -896,48 +898,90 @@ def _keypicker(tk, parent, label, initial):
     return lambda: val["v"]
 
 
+def _run_settings_window():
+    """Settings-venster op de HUIDIGE thread.
+    Windows: draait in een worker-thread. macOS: draait op de main thread van een subprocess."""
+    import tkinter as tk
+    root = tk.Tk(); root.title("Lazytype — Instellingen")
+    root.configure(bg=UI_PAPER); root.attributes("-topmost", True); root.resizable(False, False)
+    tk.Label(root, text="Sneltoetsen", bg=UI_PAPER, fg=UI_INK,
+             font=("Segoe UI", 12, "bold"), anchor="w").pack(fill="x", padx=18, pady=(16, 0))
+    g_dict = _keypicker(tk, root, "Dicteren — houd in en spreek", state["hotkey_name"])
+    g_cmd  = _keypicker(tk, root, "Command — selecteer tekst + spreek instructie", state["hotkey_command"])
+    g_tr   = _keypicker(tk, root, "Vertalen — dicteren + meteen vertalen", state["hotkey_translate"])
+    g_tgt = _dropdown(tk, root, "Vertaal-doeltaal", LANG_CHOICES, state["translate_target"])
+    tk.Frame(root, bg=UI_LINE, height=1).pack(fill="x", padx=18, pady=(12, 2))
+    g_lang = _dropdown(tk, root, "Spreektaal", SPOKEN_CHOICES, state["language"])
+    g_eng = _dropdown(tk, root, "Engine", ENGINE_CHOICES, state["engine"])
+    keys = tk.Frame(root, bg=UI_PAPER); keys.pack(fill="x", padx=18, pady=(14, 0))
+    _ghost_btn(tk, keys, "Groq-key…", lambda: set_key_action(None, None)).pack(side="left")
+    _ghost_btn(tk, keys, "Abonnement-sleutel…", lambda: set_license_action(None, None)).pack(side="left", padx=10)
+
+    def _close():
+        global _keypicking
+        _keypicking = False
+        pressed.clear()
+        root.destroy()
+
+    def save():
+        global _keypicking
+        _keypicking = False
+        pressed.clear()
+        state["hotkey_name"] = g_dict(); state["hotkey_command"] = g_cmd()
+        state["hotkey_translate"] = g_tr(); state["translate_target"] = g_tgt()
+        state["language"] = g_lang(); state["engine"] = g_eng()
+        for k, envk in (("hotkey_name", "DICTATE_HOTKEY"), ("hotkey_command", "DICTATE_COMMAND_HOTKEY"),
+                        ("hotkey_translate", "DICTATE_TRANSLATE_HOTKEY"), ("translate_target", "DICTATE_TRANSLATE_TARGET"),
+                        ("language", "DICTATE_LANGUAGE"), ("engine", "DICTATE_ENGINE")):
+            dictate.save_env_value(envk, state[k])
+        rebuild_hotkeys()
+        if icon:
+            state["last"] = "Instellingen opgeslagen ✓"; refresh()
+        root.destroy()
+
+    root.protocol("WM_DELETE_WINDOW", _close)
+    _accent_btn(tk, root, "Opslaan", save).pack(pady=16)
+    root.mainloop()
+
+
+def _reload_from_env():
+    """Herlaad instellingen uit .env na een externe wijziging (bijv. macOS settings-subprocess)."""
+    env_path = dictate.ROOT / ".env"
+    if not env_path.exists():
+        return
+    vals = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if "=" in line and not line.startswith("#"):
+            k, _, v = line.partition("=")
+            vals[k.strip()] = v.strip()
+    mapping = {
+        "DICTATE_HOTKEY": "hotkey_name",
+        "DICTATE_COMMAND_HOTKEY": "hotkey_command",
+        "DICTATE_TRANSLATE_HOTKEY": "hotkey_translate",
+        "DICTATE_TRANSLATE_TARGET": "translate_target",
+        "DICTATE_LANGUAGE": "language",
+        "DICTATE_ENGINE": "engine",
+    }
+    for env_key, state_key in mapping.items():
+        if env_key in vals and vals[env_key]:
+            state[state_key] = vals[env_key]
+            os.environ[env_key] = vals[env_key]
+    rebuild_hotkeys()
+    if icon:
+        state["last"] = "Instellingen opgeslagen ✓"; refresh()
+
+
 def open_settings(icon_=None, item=None):
-    def worker():
-        import tkinter as tk
-        root = tk.Tk(); root.title("Lazytype — Instellingen")
-        root.configure(bg=UI_PAPER); root.attributes("-topmost", True); root.resizable(False, False)
-        tk.Label(root, text="Sneltoetsen", bg=UI_PAPER, fg=UI_INK,
-                 font=("Segoe UI", 12, "bold"), anchor="w").pack(fill="x", padx=18, pady=(16, 0))
-        g_dict = _keypicker(tk, root, "Dicteren — houd in en spreek", state["hotkey_name"])
-        g_cmd  = _keypicker(tk, root, "Command — selecteer tekst + spreek instructie", state["hotkey_command"])
-        g_tr   = _keypicker(tk, root, "Vertalen — dicteren + meteen vertalen", state["hotkey_translate"])
-        g_tgt = _dropdown(tk, root, "Vertaal-doeltaal", LANG_CHOICES, state["translate_target"])
-        tk.Frame(root, bg=UI_LINE, height=1).pack(fill="x", padx=18, pady=(12, 2))
-        g_lang = _dropdown(tk, root, "Spreektaal", SPOKEN_CHOICES, state["language"])
-        g_eng = _dropdown(tk, root, "Engine", ENGINE_CHOICES, state["engine"])
-        keys = tk.Frame(root, bg=UI_PAPER); keys.pack(fill="x", padx=18, pady=(14, 0))
-        _ghost_btn(tk, keys, "Groq-key…", lambda: set_key_action(None, None)).pack(side="left")
-        _ghost_btn(tk, keys, "Abonnement-sleutel…", lambda: set_license_action(None, None)).pack(side="left", padx=10)
-
-        def _close():
-            global _keypicking
-            _keypicking = False   # altijd resetten bij sluiten, ook als Wijzig… open was
-            pressed.clear()
-            root.destroy()
-
-        def save():
-            global _keypicking
-            _keypicking = False
-            pressed.clear()
-            state["hotkey_name"] = g_dict(); state["hotkey_command"] = g_cmd()
-            state["hotkey_translate"] = g_tr(); state["translate_target"] = g_tgt()
-            state["language"] = g_lang(); state["engine"] = g_eng()
-            for k, envk in (("hotkey_name", "DICTATE_HOTKEY"), ("hotkey_command", "DICTATE_COMMAND_HOTKEY"),
-                            ("hotkey_translate", "DICTATE_TRANSLATE_HOTKEY"), ("translate_target", "DICTATE_TRANSLATE_TARGET"),
-                            ("language", "DICTATE_LANGUAGE"), ("engine", "DICTATE_ENGINE")):
-                dictate.save_env_value(envk, state[k])
-            rebuild_hotkeys(); state["last"] = "Instellingen opgeslagen ✓"; refresh()
-            root.destroy()
-
-        root.protocol("WM_DELETE_WINDOW", _close)
-        _accent_btn(tk, root, "Opslaan", save).pack(pady=16)
-        root.mainloop()
-    threading.Thread(target=worker, daemon=True).start()
+    if IS_MAC:
+        def _mac():
+            import subprocess
+            proc = subprocess.Popen([sys.executable, "--settings"])
+            proc.wait()
+            _reload_from_env()
+        threading.Thread(target=_mac, daemon=True).start()
+        return
+    threading.Thread(target=_run_settings_window, daemon=True).start()
 
 
 def run_onboarding():
@@ -1296,6 +1340,10 @@ def main():
         prev.save(here / "icon-preview.png")
         print("app-icons gemaakt: icon.ico, icon.icns, icon-preview.png "
               "(site-favicons ongemoeid gelaten)")
+        return
+
+    if "--settings" in sys.argv:
+        _run_settings_window()
         return
 
     if "--selftest" in sys.argv:
