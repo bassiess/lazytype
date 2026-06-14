@@ -279,7 +279,7 @@ def handle_release():
     try:
         wav = recorder.stop()
         secs = recorder.duration()
-        dictate.beep("stop")
+        threading.Thread(target=lambda: dictate.beep("stop"), daemon=True).start()
         if secs < 0.3:
             return
         set_phase("working")
@@ -289,7 +289,7 @@ def handle_release():
             sel = dictate.copy_selection()
             if not sel:
                 state["last"] = "Command: geen tekst geselecteerd"
-                dictate.beep("error")
+                threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
                 return
             text = dictate.transform_command(wav, sel, language=state["language"], engine=state["engine"])
         elif mode == "translate":
@@ -301,18 +301,18 @@ def handle_release():
         dt = time.time() - t0
         if not text:
             state["last"] = "(geen spraak herkend)"
-            dictate.beep("error")
+            threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
             return
         print(f"  ✅ ({dt:.2f}s) → {text}")
         state["last"] = text
         dictate.paste_text(text)
-        dictate.beep("done")
+        threading.Thread(target=lambda: dictate.beep("done"), daemon=True).start()
         if state.get("history"):
             dictate.add_history(text)
     except Exception as e:
         print(f"  ⚠️  {e}")
         state["last"] = f"Fout: {e}"
-        dictate.beep("error")
+        threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
     finally:
         state["busy"] = False
         set_phase("idle")
