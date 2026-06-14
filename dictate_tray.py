@@ -128,8 +128,14 @@ HOTKEY_CHOICES = [("Rechter Ctrl", "ctrl_r"), ("Linker Ctrl", "ctrl_l"),
 
 def _hk_display(spec):
     return next((l for l, v in HOTKEY_CHOICES if v == spec), spec)
-LANG_CHOICES = [("Engels", "en"), ("Nederlands", "nl"), ("Duits", "de"), ("Frans", "fr"),
-                ("Spaans", "es"), ("Italiaans", "it"), ("Portugees", "pt")]
+LANG_CHOICES = [
+    ("Engels", "en"), ("Nederlands", "nl"), ("Duits", "de"), ("Frans", "fr"),
+    ("Spaans", "es"), ("Italiaans", "it"), ("Portugees", "pt"),
+    ("Pools", "pl"), ("Russisch", "ru"), ("Oekraïens", "uk"),
+    ("Zweeds", "sv"), ("Noors", "no"), ("Deens", "da"), ("Fins", "fi"),
+    ("Turks", "tr"), ("Arabisch", "ar"), ("Japans", "ja"),
+    ("Chinees", "zh"), ("Koreaans", "ko"),
+]
 SPOKEN_CHOICES = [("Automatisch", "auto"), ("Nederlands", "nl"), ("Engels", "en"),
                   ("Duits", "de"), ("Frans", "fr"), ("Spaans", "es")]
 ENGINE_CHOICES = [("Managed (Pro)", "managed"), ("Groq (eigen key)", "groq"),
@@ -589,6 +595,25 @@ def set_key_action(icon_, item):
     threading.Thread(target=worker, daemon=True).start()
 
 
+def _request_trial_key(email: str) -> str:
+    """POST naar trial.php → geeft proefsleutel terug of raise RuntimeError."""
+    try:
+        import requests
+        base = dictate.API_URL.rsplit("/", 1)[0]
+        r = requests.post(f"{base}/trial.php", data={
+            "email": email.strip(),
+            "device": dictate.ensure_device_id(),
+        }, timeout=15)
+        data = r.json()
+        if r.ok and data.get("ok"):
+            return data["key"]
+        raise RuntimeError(data.get("error", f"Serverfout {r.status_code}"))
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"Geen verbinding: {e}")
+
+
 # ── Abonnement (licentiesleutel) ────────────────────────────────────────
 def license_status() -> str:
     return "Status: " + dictate.license_state()["label"]
@@ -606,7 +631,8 @@ def set_license_action(icon_, item):
             p = lic.decode(val)
             state["last"] = "Abonnement: " + (lic.describe(p) if p else "ongeldige sleutel")
             if p and lic.TIERS.get(p.get("tier"), {}).get("managed"):
-                state["engine"] = "managed"  # meteen op managed zetten bij een geldige tier
+                state["engine"] = "managed"
+                dictate.save_env_value("DICTATE_ENGINE", "managed")
             refresh()
     threading.Thread(target=worker, daemon=True).start()
 
@@ -1033,26 +1059,73 @@ def run_onboarding():
         nav(s1, "Volgende →", lambda: (sel.update(t=g1(), g=g2()), s3()))
 
     def s3():
-        clear(); head("Aan de slag",
-                      "Je gratis proef van 14 dagen loopt al. Vul nu of later je gratis Groq-key in, "
-                      "of een Pro-sleutel als je een abonnement hebt.")
-        box = tk.Frame(body, bg=UI_PAPER); box.pack(fill="x", padx=24, pady=10)
-        _ghost_btn(tk, box, "Groq-key invoeren…", lambda: set_key_action(None, None)).pack(anchor="w", pady=3)
-        _ghost_btn(tk, box, "Pro-sleutel invoeren…", lambda: set_license_action(None, None)).pack(anchor="w", pady=3)
+        clear()
+        head("Aan de slag",
+             "Vul je e-mailadres in voor 14 dagen gratis — geen creditcard nodig. "
+             "Je proefsleutel wordt direct ingesteld.")
+
+        email_frame = tk.Frame(body, bg=UI_PAPER)
+        email_frame.pack(fill="x", padx=24, pady=(14, 0))
+        tk.Label(email_frame, text="E-mailadres", bg=UI_PAPER, fg=UI_SUB,
+                 font=UI_FONT, anchor="w").pack(fill="x")
+        email_var = tk.StringVar()
+        email_entry = tk.Entry(email_frame, textvariable=email_var, font=UI_FONT,
+                               relief="flat", bg="#ffffff", fg=UI_INK,
+                               insertbackground=UI_INK, highlightthickness=1,
+                               highlightbackground="#dedbd3", highlightcolor=UI_ACCENT)
+        email_entry.pack(fill="x", ipady=6, pady=(4, 0))
+        email_entry.focus_set()
+
+        status_var = tk.StringVar()
+        tk.Label(body, textvariable=status_var, bg=UI_PAPER, fg=UI_SUB,
+                 font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=24, pady=(6, 0))
+
+        tk.Frame(body, bg="#dedbd3", height=1).pack(fill="x", padx=24, pady=(14, 6))
+        alt = tk.Frame(body, bg=UI_PAPER)
+        alt.pack(fill="x", padx=24)
+        tk.Label(alt, text="Heb je al een licentie- of Pro-sleutel?",
+                 bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9)).pack(side="left")
+        _ghost_btn(tk, alt, "Invoeren…",
+                   lambda: set_license_action(None, None)).pack(side="left", padx=(6, 0))
 
         def finish():
             global _keypicking
             _keypicking = False
             pressed.clear()
-            state["hotkey_name"] = sel["d"]; state["hotkey_translate"] = sel["t"]; state["translate_target"] = sel["g"]
-            for k, envk in (("hotkey_name", "DICTATE_HOTKEY"), ("hotkey_translate", "DICTATE_TRANSLATE_HOTKEY"),
+            state["hotkey_name"] = sel["d"]
+            state["hotkey_translate"] = sel["t"]
+            state["translate_target"] = sel["g"]
+            for k, envk in (("hotkey_name", "DICTATE_HOTKEY"),
+                            ("hotkey_translate", "DICTATE_TRANSLATE_HOTKEY"),
                             ("translate_target", "DICTATE_TRANSLATE_TARGET")):
                 dictate.save_env_value(envk, state[k])
             dictate.save_env_value("DICTATE_ONBOARDED", "1")
             rebuild_hotkeys()
             root.destroy()
 
-        nav(s2, "Klaar — start Lazytype", finish)
+        def start_trial():
+            email = email_var.get().strip()
+            if not email or "@" not in email:
+                status_var.set("Vul een geldig e-mailadres in.")
+                return
+            status_var.set("Proefsleutel aanvragen…")
+            root.update()
+            try:
+                key = _request_trial_key(email)
+                dictate.save_env_value("LAZYTYPE_LICENSE", key)
+                os.environ["LAZYTYPE_LICENSE"] = key
+                state["engine"] = "managed"
+                dictate.save_env_value("DICTATE_ENGINE", "managed")
+                status_var.set("✓ Gelukt! 14 dagen gratis dicteren.")
+                root.after(1000, finish)
+            except Exception as e:
+                status_var.set(f"Fout: {e}")
+
+        bar = tk.Frame(body, bg=UI_PAPER)
+        bar.pack(side="bottom", fill="x", padx=22, pady=20)
+        _accent_btn(tk, bar, "Start proef →", start_trial).pack(side="right")
+        _ghost_btn(tk, bar, "← Terug", s2).pack(side="left")
+        _ghost_btn(tk, bar, "Overslaan", finish).pack(side="left", padx=(12, 0))
 
     def skip():
         global _keypicking

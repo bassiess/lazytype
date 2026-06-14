@@ -25,11 +25,13 @@ SECRET_ENV = "LAZYTYPE_LICENSE_SECRET"
 PREFIX = "LZT"
 
 # Sleutel-tiers (moet gelijklopen met pricing.json en transcribe.php).
-# "trial" is GEEN sleutel-tier maar een lokale 14-daagse app-proef (zie dictate.py).
-# Een "Pro-proef" = gewoon een Pro-sleutel met een korte vervaldatum.
+# "trial"    = 14-daagse proefsleutel (server-managed, net als Pro maar met vervaldatum)
+# "personal" = eenmalige aanschaf, eigen Groq-key (BYOK), geen vervaldatum
+# "pro"      = abonnement, server-managed, geen vervaldatum
 TIERS = {
-    "personal": {"name": "Personal", "managed": False},  # eenmalig, eigen Groq-key
-    "pro":      {"name": "Pro",      "managed": True},    # abonnement, wij hosten
+    "trial":    {"name": "Proef (14d)", "managed": True},   # proefsleutel, server-managed
+    "personal": {"name": "Personal",   "managed": False},   # eenmalig, eigen Groq-key
+    "pro":      {"name": "Pro",        "managed": True},    # abonnement, wij hosten
 }
 
 

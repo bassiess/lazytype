@@ -35,6 +35,9 @@ jobs:
             --hidden-import pynput.mouse._darwin \
             dictate_tray.py
 
+      - name: Smoke-test gebouwde app
+        run: dist/Lazytype.app/Contents/MacOS/Lazytype --selftest
+
       - name: Maak DMG
         run: |
           hdiutil create \

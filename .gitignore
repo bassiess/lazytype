@@ -19,6 +19,7 @@ site/downloads/*.dmg
 # Owner-only: licentie-data en server-secrets — nooit committen/meeleveren
 admin_data/
 api/config.php
+site/api/config.php
 api/revoked.json
 api/usage.log
 api/issued.log

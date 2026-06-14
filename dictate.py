@@ -196,7 +196,7 @@ def verify_personal_key():
     if not key:
         return
     p = license_payload()
-    if not p or p.get("tier") not in ("personal", "pro"):
+    if not p or p.get("tier") not in ("personal", "pro", "trial"):
         return
     try:
         import requests
@@ -229,20 +229,23 @@ def license_state() -> dict:
         return {"tier": "owner", "valid": True, "managed": True,
                 "days_left": None, "label": "Owner (onbeperkt)"}
     p = license_payload()
-    if p and p.get("tier") in ("personal", "pro"):
+    if p and p.get("tier") in ("personal", "pro", "trial"):
         exp = int(p.get("exp", 0) or 0)
         if (not exp or time.time() <= exp) and _license_server_ok is not False:
-            managed = p["tier"] == "pro"
+            tier = p["tier"]
+            managed = tier in ("pro", "trial")
             when = "" if not exp else " tot " + time.strftime("%Y-%m-%d", time.localtime(exp))
-            return {"tier": p["tier"], "valid": True, "managed": managed,
-                    "days_left": None, "label": ("Pro" if managed else "Personal") + when}
+            labels = {"pro": "Pro", "personal": "Personal", "trial": "Proef"}
+            return {"tier": tier, "valid": True, "managed": managed,
+                    "days_left": None, "label": labels.get(tier, tier) + when}
+    # Fallback: lokale proef zonder sleutel (BYOK, eigen Groq-key vereist)
     start_trial_if_needed()
     left = trial_days_left()
     if left > 0:
         return {"tier": "trial", "valid": True, "managed": False, "days_left": left,
                 "label": f"Proef — nog {left} dag" + ("en" if left != 1 else "")}
     return {"tier": "trial", "valid": False, "managed": False, "days_left": 0,
-            "label": "Proef verlopen — koop Personal of Pro"}
+            "label": "Proef verlopen — koop een abonnement op lazytype.com"}
 
 
 def check_access(engine: str = None):
