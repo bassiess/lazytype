@@ -18,6 +18,19 @@
 <meta name="twitter:image" content="https://lazytype.com/og.png">
 <link rel="alternate" hreflang="en" href="https://lazytype.com/">
 <link rel="alternate" hreflang="nl" href="https://lazytype.com/nl/">
+<link rel="alternate" hreflang="de" href="https://lazytype.com/de/">
+<link rel="alternate" hreflang="fr" href="https://lazytype.com/fr/">
+<link rel="alternate" hreflang="es" href="https://lazytype.com/es/">
+<link rel="alternate" hreflang="pt" href="https://lazytype.com/pt/">
+<link rel="alternate" hreflang="it" href="https://lazytype.com/it/">
+<link rel="alternate" hreflang="ja" href="https://lazytype.com/ja/">
+<link rel="alternate" hreflang="zh" href="https://lazytype.com/zh/">
+<link rel="alternate" hreflang="ko" href="https://lazytype.com/ko/">
+<link rel="alternate" hreflang="ru" href="https://lazytype.com/ru/">
+<link rel="alternate" hreflang="pl" href="https://lazytype.com/pl/">
+<link rel="alternate" hreflang="sv" href="https://lazytype.com/sv/">
+<link rel="alternate" hreflang="tr" href="https://lazytype.com/tr/">
+<link rel="alternate" hreflang="ar" href="https://lazytype.com/ar/">
 <link rel="alternate" hreflang="x-default" href="https://lazytype.com/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,7 +48,7 @@
 {"@type":"Question","name":"How is Lazytype so fast?","acceptedAnswer":{"@type":"Answer","text":"It runs OpenAI's Whisper large-v3-turbo on Groq, around 216 times faster than real time, so a few seconds of speech is transcribed in well under a second."}},
 {"@type":"Question","name":"Is my audio private?","acceptedAnswer":{"@type":"Answer","text":"Audio is sent only to transcribe a clip and is not stored. You can also switch to the built-in on-device engine to work fully offline."}},
 {"@type":"Question","name":"Which languages does it handle?","acceptedAnswer":{"@type":"Answer","text":"More than 100, detected automatically, with excellent accuracy in English and Dutch, plus optional translation as you dictate."}},
-{"@type":"Question","name":"Does Lazytype work on macOS?","acceptedAnswer":{"@type":"Answer","text":"The Windows app is available now. macOS is in beta and builds from source, using the same hold-to-talk flow."}}
+{"@type":"Question","name":"Does Lazytype work on macOS?","acceptedAnswer":{"@type":"Answer","text":"Yes — Lazytype is available for both Windows and macOS. Download the .dmg, drag it to Applications, and grant Accessibility, Input Monitoring and Microphone permission in System Settings once."}}
 ]}
 </script>
 <style>
@@ -1053,6 +1066,14 @@
     }, {threshold: .5});
     document.querySelectorAll('[data-count]').forEach(el => cntIO.observe(el));
   }
+</script>
+<script>
+(function(){
+  if(sessionStorage.getItem('lt-lang-redir'))return;
+  var l=(navigator.language||navigator.userLanguage||'').split('-')[0].toLowerCase();
+  var m={nl:'/nl/',de:'/de/',fr:'/fr/',es:'/es/',pt:'/pt/',it:'/it/',ja:'/ja/',zh:'/zh/',ko:'/ko/',ru:'/ru/',pl:'/pl/',sv:'/sv/',tr:'/tr/',ar:'/ar/'};
+  if(m[l]){sessionStorage.setItem('lt-lang-redir','1');location.replace(m[l]);}
+})();
 </script>
 </body>
 </html>

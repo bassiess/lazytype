@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lazytype — برنامج الإملاء الصوتي لكل تطبيق، أسرع من الكتابة</title>
+<meta name="description" content="اضغط على مفتاح، تكلّم، ثم أرخِه. Lazytype يحوّل صوتك إلى نص فوراً في أي تطبيق. برنامج الإملاء الصوتي ويندوز، تحويل الصوت إلى نص، أكثر من 100 لغة.">
+<link rel="canonical" href="https://lazytype.com/ar/">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#f7f6f3">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Lazytype — الإملاء الصوتي في كل تطبيق">
+<meta property="og:description" content="اضغط على مفتاح، تكلّم، أرخِه. نص منظّم في أي تطبيق.">
+<meta property="og:url" content="https://lazytype.com/ar/">
+<meta property="og:image" content="https://lazytype.com/og.png">
+<link rel="alternate" hreflang="en" href="https://lazytype.com/">
+<link rel="alternate" hreflang="nl" href="https://lazytype.com/nl/">
+<link rel="alternate" hreflang="de" href="https://lazytype.com/de/">
+<link rel="alternate" hreflang="fr" href="https://lazytype.com/fr/">
+<link rel="alternate" hreflang="es" href="https://lazytype.com/es/">
+<link rel="alternate" hreflang="pt" href="https://lazytype.com/pt/">
+<link rel="alternate" hreflang="it" href="https://lazytype.com/it/">
+<link rel="alternate" hreflang="ja" href="https://lazytype.com/ja/">
+<link rel="alternate" hreflang="zh" href="https://lazytype.com/zh/">
+<link rel="alternate" hreflang="ko" href="https://lazytype.com/ko/">
+<link rel="alternate" hreflang="ru" href="https://lazytype.com/ru/">
+<link rel="alternate" hreflang="pl" href="https://lazytype.com/pl/">
+<link rel="alternate" hreflang="sv" href="https://lazytype.com/sv/">
+<link rel="alternate" hreflang="tr" href="https://lazytype.com/tr/">
+<link rel="alternate" hreflang="ar" href="https://lazytype.com/ar/">
+<link rel="alternate" hreflang="x-default" href="https://lazytype.com/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Lazytype","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows, macOS","url":"https://lazytype.com/ar/","image":"https://lazytype.com/og.png","description":"برنامج إملاء صوتي لتحويل الصوت إلى نص على ويندوز وماك. اضغط على مفتاح، تكلّم، ويظهر النص المنظّم في أي تطبيق.","offers":[{"@type":"Offer","price":"25","priceCurrency":"EUR","name":"Personal — ترخيص مدفوع مرة واحدة"},{"@type":"Offer","price":"5","priceCurrency":"EUR","name":"Pro — اشتراك شهري"}],"publisher":{"@type":"Organization","name":"Lazytype","url":"https://lazytype.com/"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"ما الفرق بين الخطتين؟","acceptedAnswer":{"@type":"Answer","text":"Personal هو ترخيص يُدفع مرة واحدة بـ 25 يورو، وتستخدم معه مفتاح Groq المجاني الخاص بك (دقيقتان للإعداد). Pro هو اشتراك شهري نستضيف فيه نحن عملية التحويل، فلا تحتاج إلى أي مفتاح أو إعدادات. كلا الخطتين يشملان جميع الميزات وفترة تجربة كاملة 14 يوماً."}},{"@type":"Question","name":"هل التجربة المجانية حقيقية؟","acceptedAnswer":{"@type":"Answer","text":"نعم. أربعة عشر يوماً، جميع الميزات، ولا حاجة لوسيلة دفع للبدء."}},{"@type":"Question","name":"كيف يكون سريعاً إلى هذه الدرجة؟","acceptedAnswer":{"@type":"Answer","text":"يعمل البرنامج على نموذج Whisper large-v3-turbo من OpenAI عبر Groq، وهو أسرع بنحو 216 مرة من الوقت الفعلي. ثوانٍ من الكلام تُحوَّل إلى نص في أقل من ثانية واحدة."}},{"@type":"Question","name":"هل صوتي خاص وآمن؟","acceptedAnswer":{"@type":"Answer","text":"يُرسَل الصوت فقط لتحويل المقطع ولا يُحفظ ولا يُعاد استخدامه. إذا أردت ألا يغادر أي شيء جهازك، فعِّل المحرك المحلي المدمج واعمل بشكل كامل بلا إنترنت."}}]}
+</script>
+<style>
+  :root{--paper:#f7f6f3;--bg:#fbfaf8;--card:#fff;--ink:#191a1e;--ink2:#3c4049;--muted:#6b6f7b;--faint:#9a9ea9;--line:#e8e6e0;--line2:#dedbd3;--accent:#5a46e0;--accent-ink:#4a37c8;--accent-soft:#efecfd;--ok:#1f9d57;--serif:"Fraunces",Georgia,serif;--sans:"Inter",system-ui,sans-serif;--mono:"JetBrains Mono",monospace;--shadow:0 1px 2px rgba(24,22,18,.04),0 12px 28px -12px rgba(24,22,18,.16);--shadow-lg:0 2px 6px rgba(24,22,18,.05),0 40px 80px -30px rgba(24,22,18,.28)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;direction:rtl;text-align:right}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 26px}
+  .serif{font-family:var(--serif);font-weight:400}
+  .btn{display:inline-flex;align-items:center;gap:9px;font-family:inherit;font-size:15px;font-weight:550;border-radius:10px;padding:12px 20px;border:1px solid transparent;transition:transform .14s,box-shadow .2s,border-color .2s}
+  .btn-primary{background:var(--ink);color:#fff}.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 24px -8px rgba(24,22,18,.45)}
+  .btn-ghost{background:var(--card);border-color:var(--line2);color:var(--ink)}.btn-ghost:hover{border-color:var(--ink)}
+  .btn-lg{padding:15px 26px;font-size:16px}
+  header.nav{position:sticky;top:0;z-index:60;background:rgba(251,250,248,.8);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:66px;flex-direction:row-reverse}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:18px;flex-direction:row-reverse}.brand img{width:30px;height:30px;border-radius:8px}
+  .nav-mid{display:flex;gap:30px;flex-direction:row-reverse}.nav-mid a{color:var(--ink2);font-size:15px}.nav-mid a:hover{color:var(--ink)}
+  .nav-end{display:flex;gap:14px;align-items:center;flex-direction:row-reverse}.nav-end .lang{font-size:14px;color:var(--muted)}.nav-end .lang:hover{color:var(--ink)}
+  .hero{padding:72px 0 30px}.hero-grid{display:grid;grid-template-columns:1.04fr .96fr;gap:54px;align-items:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border-radius:99px;padding:6px 13px;margin-bottom:22px}
+  .eyebrow .pin{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  h1{font-family:var(--serif);font-weight:400;font-size:clamp(38px,5.4vw,62px);line-height:1.15;letter-spacing:-.01em;margin-bottom:20px}
+  h1 em{font-style:italic;color:var(--accent-ink)}
+  .lead{font-size:19px;color:var(--ink2);max-width:470px;margin-bottom:28px}
+  .cta{display:flex;gap:13px;flex-wrap:wrap;flex-direction:row-reverse}.note{margin-top:16px;font-size:14px;color:var(--muted)}
+  .demo{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-lg);overflow:hidden}
+  .demo-top{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line);flex-direction:row-reverse}
+  .demo-mic{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center}.demo-mic svg{width:16px;height:16px}
+  .demo-top .ht{margin-right:auto;margin-left:0;font-size:12.5px;color:var(--faint);font-family:var(--mono)}
+  .demo-body{padding:20px 18px 22px}.demo-label{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:7px}
+  .demo-said{font-family:var(--mono);font-size:13.5px;color:var(--muted)}.demo-said s{color:var(--faint)}
+  .demo-div{height:1px;background:var(--line);margin:15px 0}
+  .demo-typed{font-size:16.5px;color:var(--ink);min-height:26px}
+  .demo-foot{display:flex;align-items:center;gap:10px;padding:13px 18px;border-top:1px solid var(--line);background:var(--paper);font-size:13px;color:var(--muted);flex-direction:row-reverse}
+  .kbd{font-family:var(--mono);font-size:12px;color:var(--ink2);background:#fff;border:1px solid var(--line2);border-bottom-width:2px;border-radius:6px;padding:3px 8px}
+  .trust{border-top:1px solid var(--line);margin-top:36px;padding:24px 0}
+  .trust .wrap{display:flex;gap:14px 26px;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:14.5px}
+  .trust b{color:var(--ink)}.sep{width:4px;height:4px;border-radius:50%;background:var(--line2);align-self:center}
+  section{padding:78px 0}
+  .eyebrow2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);font-weight:600;margin-bottom:12px}
+  h2{font-family:var(--serif);font-weight:400;font-size:clamp(27px,3.6vw,38px);letter-spacing:-.01em;line-height:1.2}
+  .head{max-width:600px}.head.center{margin:0 auto;text-align:center}.head p{color:var(--ink2);margin-top:12px}
+  .speed{background:var(--paper);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .bars{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:42px}
+  .bar-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+  .who{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;flex-direction:row-reverse}.who span{font-weight:550}.who b{font-family:var(--serif);font-size:30px}
+  .track{height:12px;background:#eeece6;border-radius:99px;overflow:hidden;direction:ltr}.fill{height:100%;border-radius:99px}
+  .fill.slow{width:27%;background:#c9c6bd}.fill.fast{width:88%;background:linear-gradient(90deg,var(--accent),#7b6bf0)}
+  .unit{margin-top:10px;font-size:13px;color:var(--muted)}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:48px}
+  .step{padding-top:22px;border-top:2px solid var(--ink)}.step .n{font-family:var(--mono);font-size:13px;color:var(--muted);margin-bottom:10px}
+  .step h3{font-size:19px;font-weight:600;margin-bottom:8px}.step p{color:var(--ink2);font-size:15.5px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px;transition:transform .25s,box-shadow .25s}.card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .card .ic{width:40px;height:40px;border-radius:11px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;margin-bottom:15px}.card .ic svg{width:21px;height:21px}
+  .card h3{font-size:18px;font-weight:600;margin-bottom:7px}.card p{color:var(--ink2);font-size:15px}
+  .pricing{background:var(--paper);border-top:1px solid var(--line)}
+  .prices{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:780px;margin:44px auto 0}
+  .price{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:32px;display:flex;flex-direction:column}.price.feat{border-color:var(--ink);box-shadow:var(--shadow);position:relative}
+  .price .tag{position:absolute;top:-12px;left:26px;right:auto;background:var(--ink);color:#fff;font-size:12px;padding:5px 12px;border-radius:99px}
+  .pname{font-weight:600;color:var(--ink2)}.amt{font-family:var(--serif);font-size:44px;margin:8px 0 2px;line-height:1}.amt small{font-family:var(--sans);font-size:16px;color:var(--muted)}
+  .pdesc{color:var(--muted);font-size:14.5px;min-height:42px;margin-bottom:18px}
+  .price ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:22px}.price li{display:flex;gap:10px;font-size:14.5px;color:var(--ink2);flex-direction:row-reverse;text-align:right}.price li svg{width:18px;height:18px;color:var(--ok);flex:none;margin-top:2px}
+  .price .btn{width:100%;justify-content:center;margin-top:auto}
+  .faq{max-width:740px;margin:40px auto 0;border-top:1px solid var(--line)}
+  .qa{border-bottom:1px solid var(--line)}.qa button{width:100%;background:none;border:none;font-family:inherit;color:var(--ink);font-size:17px;font-weight:550;text-align:right;padding:20px 2px;cursor:pointer;display:flex;justify-content:space-between;gap:16px;flex-direction:row-reverse}
+  .qa .pm{color:var(--muted);transition:transform .3s}.qa.open .pm{transform:rotate(45deg)}
+  .qa .ans{max-height:0;overflow:hidden;transition:max-height .35s}.qa .ans p{padding:0 2px 20px;color:var(--ink2);font-size:15.5px}.qa.open .ans{max-height:240px}
+  footer{border-top:1px solid var(--line);padding:40px 0}.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:18px;color:var(--muted);font-size:14px;flex-direction:row-reverse}
+  .foot a{color:var(--ink2);margin-right:18px;margin-left:0}.foot a:hover{color:var(--ink)}
+  @media(max-width:860px){.nav-mid{display:none}.hero-grid,.bars,.steps,.grid,.prices{grid-template-columns:1fr}.lead{max-width:none}}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/ar/"><img src="/favicon.png" alt="Lazytype"> Lazytype</a>
+    <nav class="nav-mid">
+      <a href="#hoe">كيف يعمل</a><a href="#features">الميزات</a><a href="#asmaar">الأسعار</a><a href="/blog/">المدوّنة</a>
+    </nav>
+    <div class="nav-end">
+      <a class="lang" href="/" title="English">EN</a>
+      <a class="btn btn-primary" href="#download">جرّبه مجاناً</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow"><span class="pin"></span> تحويل الصوت إلى نص على كامل جهازك</span>
+      <h1>قُلها.<br>وستجدها <em>مكتوبة.</em></h1>
+      <p class="lead">اضغط على مفتاح، تكلّم، ثم أرخِه. Lazytype يحوّل كلامك فوراً إلى نص منظّم في أي تطبيق، بمجرد انتهائك من الكلام.</p>
+      <div class="cta">
+        <a class="btn btn-primary btn-lg" href="#download">تنزيل للويندوز</a>
+        <a class="btn btn-ghost btn-lg" href="#hoe">كيف يعمل</a>
+      </div>
+      <div class="note">14 يوماً مجاناً. ثم 25 يورو مرة واحدة أو اشتراك شهري. ويندوز الآن، وماك قريباً.</div>
+    </div>
+    <div class="demo" id="demo">
+      <div class="demo-top">
+        <span class="demo-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+        <span class="ht">Ctrl اليسار مضغوط</span>
+      </div>
+      <div class="demo-body">
+        <div class="demo-label">ما تقوله</div>
+        <div class="demo-said" id="said"></div>
+        <div class="demo-div"></div>
+        <div class="demo-label">ما يكتبه Lazytype</div>
+        <div class="demo-typed" id="typed"></div>
+      </div>
+      <div class="demo-foot"><span class="kbd">Ctrl</span> مضغوط &nbsp;·&nbsp; تكلّم &nbsp;·&nbsp; أرخِه <span style="margin-right:auto;margin-left:0;font-family:var(--mono);font-size:12px">0.7s</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="trust"><div class="wrap">
+  <span><b>100+</b> لغة</span><span class="sep"></span>
+  <span><b>أقل من ثانية</b> من الصوت إلى النص</span><span class="sep"></span>
+  <span>يعمل في <b>كل</b> تطبيق</span><span class="sep"></span>
+  <span><b>ويندوز</b> وماك</span>
+</div></div>
+
+<section class="speed">
+  <div class="wrap">
+    <div class="head center">
+      <div class="eyebrow2">لماذا تتكلّم</div>
+      <h2>يداك هما الجزء البطيء.</h2>
+      <p>معظم الناس يتحدثون بسرعة تفوق ثلاثة أضعاف سرعة كتابتهم، ولا يفقدون أفكارهم وهم يبحثون عن المفاتيح. Lazytype يحوّل تلك السرعة إلى نص مكتمل.</p>
+    </div>
+    <div class="bars">
+      <div class="bar-card"><div class="who"><span>الكتابة</span><b>~40</b></div><div class="track"><div class="fill slow"></div></div><div class="unit">كلمة في الدقيقة، في المتوسط</div></div>
+      <div class="bar-card"><div class="who"><span>الكلام</span><b>~130</b></div><div class="track"><div class="fill fast"></div></div><div class="unit">كلمة في الدقيقة، بارتياح تام</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="hoe">
+  <div class="wrap">
+    <div class="head"><div class="eyebrow2">كيف يعمل</div><h2>دقيقتان للإعداد. بعدها تنسى أنه موجود.</h2></div>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><h3>التثبيت والتشغيل</h3><p>نزّل التطبيق. أيقونة صغيرة تجلس في شريط النظام، جاهزة في صمت حين تكون أنت مستعداً.</p></div>
+      <div class="step"><div class="n">02</div><h3>اختر خطتك</h3><p>أحضر مفتاح Groq المجاني الخاص بك مع الترخيص الدائم، أو اشترك ونحن نتولى عملية التحويل. لا مفتاح، لا تعقيدات.</p></div>
+      <div class="step"><div class="n">03</div><h3>اضغط، تكلّم، انتهى</h3><p>اضغط مفتاح Ctrl الأيسر، قل جملتك، ثم أرخِه. يظهر النص تلقائياً في المكان الذي تكتب فيه.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="head"><div class="eyebrow2">ما يتضمّنه</div><h2>تطبيق صغير. إمكانيات مدهشة.</h2></div>
+    <div class="grid">
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></div><h3>أسرع من لوحة المفاتيح</h3><p>يعمل بنموذج Whisper large-v3-turbo على Groq، أسرع بنحو 216 مرة من الوقت الفعلي. جملة قصيرة تعود قبل أن تصل يداك إلى المفاتيح.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg></div><h3>أكثر من 100 لغة</h3><p>تكلّم بلغتك ببساطة. Lazytype يتعرّف على اللغة تلقائياً، بدقة ممتازة في العربية والإنجليزية وعشرات اللغات الأخرى.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 4 16 11l7 3-7 3-3 7-3-7-7-3 7-3 3-7Z"/></svg></div><h3>تنقية بالذكاء الاصطناعي وترجمة</h3><p>خطوة اختيارية تحذف الأصوات الزائدة والتوقفات، وتصحّح علامات الترقيم، أو تترجم ما تقوله أثناء الكلام.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01"/></svg></div><h3>في كل تطبيق</h3><p>لا نافذة منفصلة للنسخ واللصق. يظهر النص مباشرة في أي تطبيق يكون نشطاً: البريد، المحادثات، المستندات، المحرر.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h3>الخصوصية مُدمجة</h3><p>يُرسَل الصوت فقط لتحويل المقطع ولا يُحفظ. هل تفضّل العمل دون إنترنت تماماً؟ فعِّل المحرك المحلي المدمج.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div><h3>اختصار ذكي</h3><p>اضغط مطوّلاً على Ctrl الأيسر للإملاء. ضربة خفيفة أو Ctrl+C تعمل كالمعتاد. فقط الضغط المتعمّد الطويل يبدأ الإملاء.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="asmaar">
+  <div class="wrap">
+    <div class="head center"><div class="eyebrow2">الأسعار</div><h2>جرّبه مجاناً. احتفظ به بالطريقة التي تناسبك.</h2><p>كل خطة تبدأ بتجربة مجانية 14 يوماً، جميع الميزات، بدون الحاجة لوسيلة دفع.</p></div>
+    <div class="prices">
+      <div class="price">
+        <div class="pname">Personal</div><div class="amt">€25 <small>مرة واحدة</small></div>
+        <div class="pdesc">ادفع مرة واحدة واستخدمه إلى الأبد. مع مفتاح Groq المجاني الخاص بك.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> دفعة واحدة، بدون اشتراك</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> مفتاح Groq المجاني الخاص بك</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> جميع الميزات، ويندوز وماك</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> محرك محلي دون إنترنت مدمج</li>
+        </ul>
+        <a class="btn btn-ghost" href="#download">ابدأ تجربة 14 يوماً</a>
+      </div>
+      <div class="price feat">
+        <div class="tag">بدون تعقيد</div>
+        <div class="pname">Pro</div><div class="amt">€5 <small>/ شهر</small></div>
+        <div class="pdesc">نحن نستضيف عملية التحويل. لا مفتاح API، لا إعدادات.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> لا تحتاج إلى مفتاح Groq أبداً</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> دائماً أحدث النماذج</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> جميع الميزات، ويندوز وماك</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> إلغاء في أي وقت</li>
+        </ul>
+        <a class="btn btn-primary" href="#download">ابدأ تجربة 14 يوماً</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download" style="text-align:center">
+  <div class="wrap">
+    <div style="background:var(--ink);color:#fff;border-radius:24px;padding:60px 26px">
+      <h2 style="color:#fff">أرِح يديك من لوحة المفاتيح.</h2>
+      <p style="color:rgba(255,255,255,.72);max-width:440px;margin:14px auto 26px">نزّل Lazytype، وتكلّم ليوم واحد، ولاحظ كم لن تفتقد الكتابة بالأصابع.</p>
+      <div class="cta" style="justify-content:center">
+        <a class="btn btn-primary btn-lg" style="background:#fff;color:var(--ink)" href="/downloads/Lazytype.exe">تنزيل للويندوز</a>
+        <a class="btn btn-ghost btn-lg" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.25)" href="#faq">ماك والتفاصيل</a>
+      </div>
+      <div style="margin-top:16px;font-size:13.5px;color:rgba(255,255,255,.55)">ويندوز 10/11 · ±33 ميجابايت · 14 يوماً مجاناً</div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" style="padding-top:20px">
+  <div class="wrap">
+    <div class="head center"><div class="eyebrow2">الأسئلة الشائعة</div><h2>أسئلة وجيهة.</h2></div>
+    <div class="faq">
+      <div class="qa"><button>ما الفرق بين الخطتين؟<span class="pm">+</span></button><div class="ans"><p>Personal هو ترخيص يُدفع مرة واحدة بـ 25 يورو، وتستخدم معه مفتاح Groq المجاني الخاص بك (دقيقتان للإعداد). Pro هو اشتراك شهري نستضيف فيه نحن عملية التحويل، فلا تحتاج إلى أي مفتاح أو إعدادات. كلا الخطتين يشملان جميع الميزات وفترة تجربة كاملة 14 يوماً.</p></div></div>
+      <div class="qa"><button>هل التجربة المجانية حقيقية؟<span class="pm">+</span></button><div class="ans"><p>نعم. أربعة عشر يوماً، جميع الميزات، ولا حاجة لوسيلة دفع للبدء.</p></div></div>
+      <div class="qa"><button>كيف يكون سريعاً إلى هذه الدرجة؟<span class="pm">+</span></button><div class="ans"><p>يعمل البرنامج على نموذج Whisper large-v3-turbo من OpenAI عبر Groq، وهو أسرع بنحو 216 مرة من الوقت الفعلي. ثوانٍ من الكلام تُحوَّل إلى نص في أقل من ثانية واحدة.</p></div></div>
+      <div class="qa"><button>هل صوتي خاص وآمن؟<span class="pm">+</span></button><div class="ans"><p>يُرسَل الصوت فقط لتحويل المقطع ولا يُحفظ ولا يُعاد استخدامه. إذا أردت ألا يغادر أي شيء جهازك، فعِّل المحرك المحلي المدمج واعمل بشكل كامل بلا إنترنت.</p></div></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>© 2026 Lazytype · برنامج الإملاء الصوتي لكل تطبيق</span>
+    <span><a href="/">English</a><a href="/legal/privacy/">الخصوصية</a><a href="/legal/terms/">الشروط</a><a href="/blog/">المدوّنة</a></span>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('.qa button').forEach(b=>b.addEventListener('click',()=>b.parentElement.classList.toggle('open')));
+  const said=document.getElementById('said'),typed=document.getElementById('typed');
+  const takes=[
+    {raw:'أرسل التقرير إلى الفريق كله قبل الجمعة', clean:'أرسِل التقرير إلى الفريق كله قبل الجمعة.'},
+    {raw:'هل يمكنك تأجيل اجتماعنا إلى بعد ظهر الخميس', clean:'هل يمكنك تأجيل اجتماعنا إلى بعد ظهر الخميس؟'},
+    {raw:'يبدو ذلك جيداً سأتصل بك بعد قليل', clean:'يبدو ذلك جيداً، سأتصل بك بعد قليل.'}
+  ];
+  let k=0;
+  function run(){
+    const t=takes[k]; said.innerHTML='<s>'+t.raw+'</s>'; typed.textContent=''; let i=0;
+    const type=()=>{ if(i<=t.clean.length){ typed.textContent=t.clean.slice(0,i); i++; setTimeout(type,30);} else { k=(k+1)%takes.length; setTimeout(run,2600);} };
+    setTimeout(type,700);
+  }
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){run();io.disconnect();}})},{threshold:.3});
+  io.observe(document.getElementById('demo'));
+</script>
+</body>
+</html>

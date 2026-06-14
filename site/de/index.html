@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lazytype — Diktiersoftware für Windows: Spracherkennung in jeder App</title>
+<meta name="description" content="Taste gedrückt halten, sprechen, loslassen. Lazytype wandelt Sprache zu Text direkt in jeder App. Blitzschnell, 100+ Sprachen, präzise Spracherkennung. Windows &amp; macOS.">
+<link rel="canonical" href="https://lazytype.com/de/">
+<link rel="icon" type="image/png" href="/favicon.png">
+<meta name="theme-color" content="#f7f6f3">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Lazytype — Diktiersoftware für Windows &amp; macOS">
+<meta property="og:description" content="Taste gedrückt halten, sprechen, loslassen. Sauberer Text in jeder App.">
+<meta property="og:url" content="https://lazytype.com/de/">
+<meta property="og:image" content="https://lazytype.com/og.png">
+<link rel="alternate" hreflang="en" href="https://lazytype.com/">
+<link rel="alternate" hreflang="nl" href="https://lazytype.com/nl/">
+<link rel="alternate" hreflang="de" href="https://lazytype.com/de/">
+<link rel="alternate" hreflang="fr" href="https://lazytype.com/fr/">
+<link rel="alternate" hreflang="es" href="https://lazytype.com/es/">
+<link rel="alternate" hreflang="pt" href="https://lazytype.com/pt/">
+<link rel="alternate" hreflang="it" href="https://lazytype.com/it/">
+<link rel="alternate" hreflang="ja" href="https://lazytype.com/ja/">
+<link rel="alternate" hreflang="zh" href="https://lazytype.com/zh/">
+<link rel="alternate" hreflang="ko" href="https://lazytype.com/ko/">
+<link rel="alternate" hreflang="ru" href="https://lazytype.com/ru/">
+<link rel="alternate" hreflang="pl" href="https://lazytype.com/pl/">
+<link rel="alternate" hreflang="sv" href="https://lazytype.com/sv/">
+<link rel="alternate" hreflang="tr" href="https://lazytype.com/tr/">
+<link rel="alternate" hreflang="ar" href="https://lazytype.com/ar/">
+<link rel="alternate" hreflang="x-default" href="https://lazytype.com/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Lazytype","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows, macOS","url":"https://lazytype.com/de/","image":"https://lazytype.com/og.png","description":"Diktiersoftware mit Spracherkennung für Windows und macOS. Taste gedrückt halten, sprechen, und der Text erscheint sofort in jeder App.","offers":[{"@type":"Offer","price":"25","priceCurrency":"EUR","name":"Personal — Einmallizenz"},{"@type":"Offer","price":"5","priceCurrency":"EUR","name":"Pro — Monatsabonnement"}],"publisher":{"@type":"Organization","name":"Lazytype","url":"https://lazytype.com/"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Was ist der Unterschied zwischen den beiden Tarifen?","acceptedAnswer":{"@type":"Answer","text":"Personal ist eine Einmallizenz für 25 €, bei der Sie Ihren eigenen kostenlosen Groq-Key mitbringen (zwei Minuten Aufwand). Pro ist ein Abonnement, bei dem wir die Transkription hosten — kein Key, keine Einrichtung. Beide Tarife enthalten alle Funktionen und die volle 14-tägige Testphase."}},{"@type":"Question","name":"Gibt es wirklich eine kostenlose Testphase?","acceptedAnswer":{"@type":"Answer","text":"Ja. Vierzehn Tage, alle Funktionen, keine Zahlungsmethode erforderlich."}},{"@type":"Question","name":"Wie kann die Spracherkennung so schnell sein?","acceptedAnswer":{"@type":"Answer","text":"Lazytype verwendet OpenAIs Whisper large-v3-turbo auf Groq — etwa 216-mal schneller als Echtzeit. Wenige Sekunden Sprache werden in deutlich unter einer Sekunde transkribiert."}},{"@type":"Question","name":"Bleiben meine Audiodaten privat?","acceptedAnswer":{"@type":"Answer","text":"Die Audiodaten werden ausschließlich zur Transkription übertragen und weder gespeichert noch weiterverwendet. Wer möchte, dass nichts das eigene Gerät verlässt, kann auf die eingebaute On-Device-Engine umschalten und vollständig offline arbeiten."}}]}
+</script>
+<style>
+  :root{--paper:#f7f6f3;--bg:#fbfaf8;--card:#fff;--ink:#191a1e;--ink2:#3c4049;--muted:#6b6f7b;--faint:#9a9ea9;--line:#e8e6e0;--line2:#dedbd3;--accent:#5a46e0;--accent-ink:#4a37c8;--accent-soft:#efecfd;--ok:#1f9d57;--serif:"Fraunces",Georgia,serif;--sans:"Inter",system-ui,sans-serif;--mono:"JetBrains Mono",monospace;--shadow:0 1px 2px rgba(24,22,18,.04),0 12px 28px -12px rgba(24,22,18,.16);--shadow-lg:0 2px 6px rgba(24,22,18,.05),0 40px 80px -30px rgba(24,22,18,.28)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 26px}
+  .serif{font-family:var(--serif);font-weight:400}
+  .btn{display:inline-flex;align-items:center;gap:9px;font-family:inherit;font-size:15px;font-weight:550;border-radius:10px;padding:12px 20px;border:1px solid transparent;transition:transform .14s,box-shadow .2s,border-color .2s}
+  .btn-primary{background:var(--ink);color:#fff}.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 24px -8px rgba(24,22,18,.45)}
+  .btn-ghost{background:var(--card);border-color:var(--line2);color:var(--ink)}.btn-ghost:hover{border-color:var(--ink)}
+  .btn-lg{padding:15px 26px;font-size:16px}
+  header.nav{position:sticky;top:0;z-index:60;background:rgba(251,250,248,.8);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:66px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:18px}.brand img{width:30px;height:30px;border-radius:8px}
+  .nav-mid{display:flex;gap:30px}.nav-mid a{color:var(--ink2);font-size:15px}.nav-mid a:hover{color:var(--ink)}
+  .nav-end{display:flex;gap:14px;align-items:center}.nav-end .lang{font-size:14px;color:var(--muted)}.nav-end .lang:hover{color:var(--ink)}
+  .hero{padding:72px 0 30px}.hero-grid{display:grid;grid-template-columns:1.04fr .96fr;gap:54px;align-items:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:500;color:var(--accent-ink);background:var(--accent-soft);border-radius:99px;padding:6px 13px;margin-bottom:22px}
+  .eyebrow .pin{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  h1{font-family:var(--serif);font-weight:400;font-size:clamp(38px,5.4vw,62px);line-height:1.03;letter-spacing:-.02em;margin-bottom:20px}
+  h1 em{font-style:italic;color:var(--accent-ink)}
+  .lead{font-size:19px;color:var(--ink2);max-width:470px;margin-bottom:28px}
+  .cta{display:flex;gap:13px;flex-wrap:wrap}.note{margin-top:16px;font-size:14px;color:var(--muted)}
+  .demo{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-lg);overflow:hidden}
+  .demo-top{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line)}
+  .demo-mic{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center}.demo-mic svg{width:16px;height:16px}
+  .demo-top .ht{margin-left:auto;font-size:12.5px;color:var(--faint);font-family:var(--mono)}
+  .demo-body{padding:20px 18px 22px}.demo-label{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:7px}
+  .demo-said{font-family:var(--mono);font-size:13.5px;color:var(--muted)}.demo-said s{color:var(--faint)}
+  .demo-div{height:1px;background:var(--line);margin:15px 0}
+  .demo-typed{font-size:16.5px;color:var(--ink);min-height:26px}
+  .demo-foot{display:flex;align-items:center;gap:10px;padding:13px 18px;border-top:1px solid var(--line);background:var(--paper);font-size:13px;color:var(--muted)}
+  .kbd{font-family:var(--mono);font-size:12px;color:var(--ink2);background:#fff;border:1px solid var(--line2);border-bottom-width:2px;border-radius:6px;padding:3px 8px}
+  .trust{border-top:1px solid var(--line);margin-top:36px;padding:24px 0}
+  .trust .wrap{display:flex;gap:14px 26px;flex-wrap:wrap;justify-content:center;color:var(--muted);font-size:14.5px}
+  .trust b{color:var(--ink)}.sep{width:4px;height:4px;border-radius:50%;background:var(--line2);align-self:center}
+  section{padding:78px 0}
+  .eyebrow2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);font-weight:600;margin-bottom:12px}
+  h2{font-family:var(--serif);font-weight:400;font-size:clamp(27px,3.6vw,38px);letter-spacing:-.02em;line-height:1.1}
+  .head{max-width:600px}.head.center{margin:0 auto;text-align:center}.head p{color:var(--ink2);margin-top:12px}
+  .speed{background:var(--paper);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .bars{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:42px}
+  .bar-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+  .who{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}.who span{font-weight:550}.who b{font-family:var(--serif);font-size:30px}
+  .track{height:12px;background:#eeece6;border-radius:99px;overflow:hidden}.fill{height:100%;border-radius:99px}
+  .fill.slow{width:27%;background:#c9c6bd}.fill.fast{width:88%;background:linear-gradient(90deg,var(--accent),#7b6bf0)}
+  .unit{margin-top:10px;font-size:13px;color:var(--muted)}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:48px}
+  .step{padding-top:22px;border-top:2px solid var(--ink)}.step .n{font-family:var(--mono);font-size:13px;color:var(--muted);margin-bottom:10px}
+  .step h3{font-size:19px;font-weight:600;margin-bottom:8px}.step p{color:var(--ink2);font-size:15.5px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px;transition:transform .25s,box-shadow .25s}.card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+  .card .ic{width:40px;height:40px;border-radius:11px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;margin-bottom:15px}.card .ic svg{width:21px;height:21px}
+  .card h3{font-size:18px;font-weight:600;margin-bottom:7px}.card p{color:var(--ink2);font-size:15px}
+  .pricing{background:var(--paper);border-top:1px solid var(--line)}
+  .prices{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:780px;margin:44px auto 0}
+  .price{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:32px;display:flex;flex-direction:column}.price.feat{border-color:var(--ink);box-shadow:var(--shadow);position:relative}
+  .price .tag{position:absolute;top:-12px;right:26px;background:var(--ink);color:#fff;font-size:12px;padding:5px 12px;border-radius:99px}
+  .pname{font-weight:600;color:var(--ink2)}.amt{font-family:var(--serif);font-size:44px;margin:8px 0 2px;line-height:1}.amt small{font-family:var(--sans);font-size:16px;color:var(--muted)}
+  .pdesc{color:var(--muted);font-size:14.5px;min-height:42px;margin-bottom:18px}
+  .price ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:22px}.price li{display:flex;gap:10px;font-size:14.5px;color:var(--ink2)}.price li svg{width:18px;height:18px;color:var(--ok);flex:none;margin-top:2px}
+  .price .btn{width:100%;justify-content:center;margin-top:auto}
+  .faq{max-width:740px;margin:40px auto 0;border-top:1px solid var(--line)}
+  .qa{border-bottom:1px solid var(--line)}.qa button{width:100%;background:none;border:none;font-family:inherit;color:var(--ink);font-size:17px;font-weight:550;text-align:left;padding:20px 2px;cursor:pointer;display:flex;justify-content:space-between;gap:16px}
+  .qa .pm{color:var(--muted);transition:transform .3s}.qa.open .pm{transform:rotate(45deg)}
+  .qa .ans{max-height:0;overflow:hidden;transition:max-height .35s}.qa .ans p{padding:0 2px 20px;color:var(--ink2);font-size:15.5px}.qa.open .ans{max-height:240px}
+  footer{border-top:1px solid var(--line);padding:40px 0}.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:18px;color:var(--muted);font-size:14px}
+  .foot a{color:var(--ink2);margin-left:18px}.foot a:hover{color:var(--ink)}
+  @media(max-width:860px){.nav-mid{display:none}.hero-grid,.bars,.steps,.grid,.prices{grid-template-columns:1fr}.lead{max-width:none}}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/de/"><img src="/favicon.png" alt="Lazytype"> Lazytype</a>
+    <nav class="nav-mid">
+      <a href="#wie-es-funktioniert">So funktioniert es</a><a href="#funktionen">Funktionen</a><a href="#preise">Preise</a><a href="/blog/">Blog</a>
+    </nav>
+    <div class="nav-end">
+      <a class="lang" href="/" title="English">EN</a>
+      <a class="btn btn-primary" href="#download">Kostenlos testen</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow"><span class="pin"></span> Sprache zu Text — in jeder App auf Ihrem PC</span>
+      <h1>Sagen Sie es.<br>Es steht <em>geschrieben.</em></h1>
+      <p class="lead">Taste gedrückt halten, sprechen, loslassen. Lazytype wandelt Ihre Worte sofort in sauberen Text um — direkt dort, wo Ihr Cursor steht. In jeder App, in Ihrer Sprache, unmittelbar nach dem Sprechen.</p>
+      <div class="cta">
+        <a class="btn btn-primary btn-lg" href="#download">Für Windows herunterladen</a>
+        <a class="btn btn-ghost btn-lg" href="#wie-es-funktioniert">So funktioniert es</a>
+      </div>
+      <div class="note">14 Tage kostenlos. Danach €25 einmalig oder Abonnement. Windows verfügbar, macOS in der Beta.</div>
+    </div>
+    <div class="demo" id="demo">
+      <div class="demo-top">
+        <span class="demo-mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+        <span class="ht">linke Strg-Taste gedrückt</span>
+      </div>
+      <div class="demo-body">
+        <div class="demo-label">Was Sie sagen</div>
+        <div class="demo-said" id="said"></div>
+        <div class="demo-div"></div>
+        <div class="demo-label">Was Lazytype schreibt</div>
+        <div class="demo-typed" id="typed"></div>
+      </div>
+      <div class="demo-foot"><span class="kbd">Strg</span> gedrückt halten &nbsp;·&nbsp; sprechen &nbsp;·&nbsp; loslassen <span style="margin-left:auto;font-family:var(--mono);font-size:12px">0.7s</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="trust"><div class="wrap">
+  <span><b>100+</b> Sprachen</span><span class="sep"></span>
+  <span><b>Unter einer Sekunde</b> von Sprache zu Text</span><span class="sep"></span>
+  <span>Funktioniert in <b>jeder</b> App</span><span class="sep"></span>
+  <span><b>Windows</b> &amp; macOS</span>
+</div></div>
+
+<section class="speed">
+  <div class="wrap">
+    <div class="head center">
+      <div class="eyebrow2">Warum diktieren</div>
+      <h2>Ihre Hände sind der langsame Teil.</h2>
+      <p>Die meisten Menschen sprechen etwa dreimal schneller als sie tippen — und verlieren dabei nicht den Gedankenfaden durch die Suche nach Tasten. Lazytype macht aus dieser Geschwindigkeit fertigen Text.</p>
+    </div>
+    <div class="bars">
+      <div class="bar-card"><div class="who"><span>Tippen</span><b>~40</b></div><div class="track"><div class="fill slow"></div></div><div class="unit">Wörter pro Minute, Durchschnitt</div></div>
+      <div class="bar-card"><div class="who"><span>Sprechen</span><b>~130</b></div><div class="track"><div class="fill fast"></div></div><div class="unit">Wörter pro Minute, entspannt</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="wie-es-funktioniert">
+  <div class="wrap">
+    <div class="head"><div class="eyebrow2">So funktioniert es</div><h2>Zwei Minuten einrichten. Danach vergessen Sie, dass es da ist.</h2></div>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><h3>Installieren &amp; starten</h3><p>App herunterladen. Ein kleines Mikrofon-Symbol sitzt still in Ihrer Taskleiste und wartet, bis Sie bereit sind.</p></div>
+      <div class="step"><div class="n">02</div><h3>Tarif wählen</h3><p>Bringen Sie Ihren eigenen kostenlosen Groq-Key mit und wählen Sie die Einmallizenz — oder nehmen Sie ein Abonnement und wir kümmern uns um die Transkription. Kein Key, kein Aufwand.</p></div>
+      <div class="step"><div class="n">03</div><h3>Gedrückt halten, sprechen, fertig</h3><p>Halten Sie die linke Strg-Taste gedrückt, sprechen Sie Ihren Satz, und lassen Sie los. Der Text erscheint genau dort, wo Sie gerade schreiben.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="funktionen">
+  <div class="wrap">
+    <div class="head"><div class="eyebrow2">Was enthalten ist</div><h2>Kleine App. Überraschend viel drin.</h2></div>
+    <div class="grid">
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></div><h3>Schneller als die Tastatur</h3><p>Whisper large-v3-turbo auf Groq — ca. 216-mal schneller als Echtzeit. Ein kurzer Satz ist transkribiert, bevor Ihre Hände die Tasten erreicht hätten.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg></div><h3>100+ Sprachen</h3><p>Sprechen Sie einfach drauflos. Lazytype erkennt die Sprache automatisch — mit hervorragender Genauigkeit auf Deutsch und Englisch.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 4 16 11l7 3-7 3-3 7-3-7-7-3 7-3 3-7Z"/></svg></div><h3>KI-Bereinigung &amp; Übersetzung</h3><p>Ein optionaler Schritt entfernt Füllwörter und Versprecher, korrigiert die Zeichensetzung oder übersetzt den Text direkt beim Sprechen.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01"/></svg></div><h3>In jeder App</h3><p>Kein Fenster zum Einfügen. Der Text erscheint direkt in der aktiven Anwendung: E-Mail, Chat, Dokumente, Code-Editor — überall.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h3>Datenschutz integriert</h3><p>Audiodaten werden ausschließlich zur Transkription übertragen und nicht gespeichert. Lieber vollständig offline? Wechseln Sie zur lokalen On-Device-Engine.</p></div>
+      <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div><h3>Intelligenter Hotkey</h3><p>Gedrückt halten auf der linken Strg-Taste. Ein kurzer Tipp oder Strg+C funktioniert weiterhin normal als Tastenkürzel. Nur bewusstes Halten startet eine Diktiersitzung.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="preise">
+  <div class="wrap">
+    <div class="head center"><div class="eyebrow2">Preise</div><h2>Kostenlos testen. Behalten, wie es zu Ihnen passt.</h2><p>Jeder Tarif startet mit 14 Tagen Test, allen Funktionen, ohne Zahlungsmittel.</p></div>
+    <div class="prices">
+      <div class="price">
+        <div class="pname">Personal</div><div class="amt">€25 <small>einmalig</small></div>
+        <div class="pdesc">Einmal zahlen, für immer nutzen. Mit Ihrem eigenen kostenlosen Groq-Key.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Einmalige Zahlung, kein Abo</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Eigener kostenloser Groq-Key</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Alle Funktionen, Windows &amp; macOS</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Offline On-Device-Engine inklusive</li>
+        </ul>
+        <a class="btn btn-ghost" href="#download">14-tägige Testphase starten</a>
+      </div>
+      <div class="price feat">
+        <div class="tag">Ohne Aufwand</div>
+        <div class="pname">Pro</div><div class="amt">€5 <small>/ Monat</small></div>
+        <div class="pdesc">Wir hosten die Transkription. Kein API-Key, keine Einrichtung.</div>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Kein Groq-Key erforderlich</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Immer die neuesten Modelle</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Alle Funktionen, Windows &amp; macOS</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Monatlich kündbar</li>
+        </ul>
+        <a class="btn btn-primary" href="#download">14-tägige Testphase starten</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="download" style="text-align:center">
+  <div class="wrap">
+    <div style="background:var(--ink);color:#fff;border-radius:24px;padding:60px 26px">
+      <h2 style="color:#fff">Gönnen Sie Ihrer Tastatur eine Pause.</h2>
+      <p style="color:rgba(255,255,255,.72);max-width:440px;margin:14px auto 26px">Laden Sie Lazytype herunter, diktieren Sie einen Tag lang, und stellen Sie fest, wie wenig Sie das Tippen vermissen.</p>
+      <div class="cta" style="justify-content:center">
+        <a class="btn btn-primary btn-lg" style="background:#fff;color:var(--ink)" href="/downloads/Lazytype.exe">Für Windows herunterladen</a>
+        <a class="btn btn-ghost btn-lg" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.25)" href="#faq">macOS &amp; Details</a>
+      </div>
+      <div style="margin-top:16px;font-size:13.5px;color:rgba(255,255,255,.55)">Windows 10/11 · ±33 MB · 14 Tage kostenlos</div>
+    </div>
+  </div>
+</section>
+
+<section id="faq" style="padding-top:20px">
+  <div class="wrap">
+    <div class="head center"><div class="eyebrow2">FAQ</div><h2>Gute Fragen.</h2></div>
+    <div class="faq">
+      <div class="qa"><button>Was ist der Unterschied zwischen den beiden Tarifen?<span class="pm">+</span></button><div class="ans"><p>Personal ist eine Einmallizenz für €25, bei der Sie Ihren eigenen kostenlosen Groq-Key mitbringen (zwei Minuten Aufwand). Pro ist ein Abonnement, bei dem wir die Transkription hosten — kein Key, keine Einrichtung. Beide Tarife enthalten alle Funktionen und die volle 14-tägige Testphase.</p></div></div>
+      <div class="qa"><button>Gibt es wirklich eine kostenlose Testphase?<span class="pm">+</span></button><div class="ans"><p>Ja. Vierzehn Tage, alle Funktionen, keine Zahlungsmethode erforderlich, um loszulegen.</p></div></div>
+      <div class="qa"><button>Wie kann die Spracherkennung so schnell sein?<span class="pm">+</span></button><div class="ans"><p>Lazytype verwendet OpenAIs Whisper large-v3-turbo auf Groq — etwa 216-mal schneller als Echtzeit. Wenige Sekunden Sprache werden in deutlich unter einer Sekunde transkribiert.</p></div></div>
+      <div class="qa"><button>Bleiben meine Audiodaten privat?<span class="pm">+</span></button><div class="ans"><p>Audiodaten werden ausschließlich zur Transkription übertragen und weder gespeichert noch weiterverwendet. Wer möchte, dass nichts das eigene Gerät verlässt, kann auf die eingebaute On-Device-Engine umschalten und vollständig offline arbeiten.</p></div></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>© 2026 Lazytype · Diktiersoftware für jede App</span>
+    <span><a href="/">English</a><a href="/legal/privacy/">Datenschutz</a><a href="/legal/terms/">Nutzungsbedingungen</a><a href="/blog/">Blog</a></span>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('.qa button').forEach(b=>b.addEventListener('click',()=>b.parentElement.classList.toggle('open')));
+  const said=document.getElementById('said'),typed=document.getElementById('typed');
+  const takes=[
+    {raw:'schick den bericht bitte bis freitag an das ganze team', clean:'Schicken Sie den Bericht bitte bis Freitag an das gesamte Team.'},
+    {raw:'könnten wir den termin auf donnerstagnachmittag verschieben', clean:'Könnten wir den Termin auf Donnerstagnachmittag verschieben?'},
+    {raw:'klingt gut ich melde mich gleich bei ihnen', clean:'Klingt gut, ich melde mich gleich bei Ihnen.'}
+  ];
+  let k=0;
+  function run(){
+    const t=takes[k]; said.innerHTML='<s>'+t.raw+'</s>'; typed.textContent=''; let i=0;
+    const type=()=>{ if(i<=t.clean.length){ typed.textContent=t.clean.slice(0,i); i++; setTimeout(type,30);} else { k=(k+1)%takes.length; setTimeout(run,2600);} };
+    setTimeout(type,700);
+  }
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){run();io.disconnect();}})},{threshold:.3});
+  io.observe(document.getElementById('demo'));
+</script>
+</body>
+</html>

@@ -1,14 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Homepage: priority 1.0 -->
   <url><loc>https://lazytype.com/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <!-- Language pages: priority 0.9 -->
   <url><loc>https://lazytype.com/nl/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/de/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/fr/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/es/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/pt/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/it/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/ja/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/zh/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/ko/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/ru/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/pl/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/sv/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/tr/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lazytype.com/ar/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <!-- Languages overview: priority 0.85 -->
+  <url><loc>https://lazytype.com/languages/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <!-- Blog index: priority 0.8 -->
   <url><loc>https://lazytype.com/blog/</loc><lastmod>2026-06-14</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <!-- Blog articles: priority 0.7 -->
   <url><loc>https://lazytype.com/blog/best-wispr-flow-alternatives-2026/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lazytype.com/blog/dictate-in-any-app-on-windows/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lazytype.com/blog/voice-to-text-without-a-subscription/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lazytype.com/blog/lazytype-vs-wispr-flow/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lazytype.com/blog/lazytype-vs-superwhisper/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lazytype.com/blog/best-dictation-app-for-mac/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lazytype.com/blog/best-ai-dictation-apps-2026/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lazytype.com/blog/voice-typing-vs-keyboard/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lazytype.com/blog/dictation-software-for-writers/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lazytype.com/blog/how-to-translate-while-you-speak/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lazytype.com/blog/lazytype-vs-bossai-2026/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lazytype.com/blog/offline-voice-to-text-windows/</loc><lastmod>2026-06-14</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <!-- Legal pages: priority 0.3 -->
   <url><loc>https://lazytype.com/legal/privacy/</loc><lastmod>2026-06-14</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://lazytype.com/legal/terms/</loc><lastmod>2026-06-14</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://lazytype.com/legal/refund/</loc><lastmod>2026-06-14</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>

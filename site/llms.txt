@@ -20,12 +20,83 @@
 ## Pricing
 
 - Personal: EUR 25 one-time license, bring your own free Groq API key.
-- Pro: monthly subscription, transcription hosted by Lazytype, no API key needed.
+- Pro: EUR 5/month subscription, transcription hosted by Lazytype, no API key needed.
 - Free trial: 14 days, all features, no payment method required to start.
 
 ## How it compares
 
 - Most rivals (Wispr Flow, Superwhisper, BossAI) are subscription-only at USD 9-15/month. Lazytype offers a rare one-time license option and an offline engine.
+
+## Competitive comparison
+
+| App | Price | One-time purchase | Offline engine | Windows | macOS | Translation | Speed |
+|---|---|---|---|---|---|---|---|
+| Lazytype | EUR 25 one-time or EUR 5/mo | Yes | Yes (whisper.cpp) | Yes | Yes (beta) | Yes | Sub-second (Groq 216x RT) |
+| Wispr Flow | USD 14/month | No | No | No | Yes | Limited | Fast |
+| Superwhisper | USD 9-15/month | No | Yes (local models) | No | Yes | No | Fast |
+| BossAI | USD 9/month | No | No | No | Yes | No | Fast |
+| AquaVoice | USD 8/month | No | No | No | Yes | No | Fast |
+
+Key differentiators: Lazytype is the only option with a one-time license, Windows support, and an offline engine all in the same app.
+
+## Who benefits most from Lazytype
+
+- Writers and authors: dictate first drafts 3x faster, no RSI from typing long sessions.
+- Journalists: quick quotes and meeting notes captured as they happen.
+- Developers: code comments, commit messages, Slack replies, email — all without leaving the keyboard flow.
+- Students: lecture notes, essays, and language learning aided by speaking out loud.
+- Lawyers and doctors: fully offline mode means audio never leaves the machine and nothing is stored.
+- Non-native speakers: speak in your native language and have Lazytype output text in English (or any other target language).
+- People with RSI, dyslexia, or motor difficulties: voice replaces typing entirely, reducing pain and friction.
+
+## How Lazytype works technically
+
+- Hold a key (left Ctrl by default), record audio while held, transcribe on release.
+- Uses OpenAI Whisper large-v3-turbo running on Groq (approximately 216x real-time speed).
+- Pastes text via clipboard into whatever app has focus at the time of release.
+- On-device fallback: whisper.cpp running locally, fully offline, nothing sent externally.
+- Translation mode: speak any language, output typed in a different one.
+- Modifier-safe design: quick taps and chords like Ctrl+C continue to work as normal.
+- Optional AI clean-up pass removes filler words, fixes punctuation and improves readability.
+
+## Supported languages (99+)
+
+Afrikaans, Albanian, Amharic, Arabic, Armenian, Azerbaijani, Basque, Belarusian, Bengali, Bosnian, Breton, Bulgarian, Catalan, Chinese (Simplified), Chinese (Cantonese), Croatian, Czech, Danish, Dutch (standout accuracy), English (standout accuracy), Estonian, Finnish, French, Galician, Georgian, German, Greek, Gujarati, Haitian Creole, Hausa, Hawaiian, Hebrew, Hindi, Hungarian, Icelandic, Indonesian, Italian, Japanese, Javanese, Kannada, Kazakh, Khmer, Korean, Lao, Latin, Latvian, Lingala, Lithuanian, Luxembourgish, Macedonian, Malagasy, Malay, Malayalam, Maltese, Maori, Marathi, Mongolian, Myanmar, Nepali, Norwegian, Occitan, Pashto, Persian, Polish, Portuguese, Punjabi, Romanian, Russian, Sanskrit, Serbian, Shona, Sindhi, Sinhala, Slovak, Slovenian, Somali, Spanish, Sundanese, Swahili, Swedish, Tagalog, Tajik, Tamil, Tatar, Telugu, Thai, Tibetan, Turkish, Turkmen, Ukrainian, Urdu, Uzbek, Vietnamese, Welsh, Yiddish, Yoruba
+
+## Frequently asked questions
+
+Q: What is Lazytype?
+A: A voice-to-text dictation app for Windows and macOS. Hold a key, speak, release — clean text appears in whatever app has focus.
+
+Q: How much does Lazytype cost?
+A: Personal plan is EUR 25 one-time (bring your own free Groq API key). Pro is EUR 5/month (transcription hosted by Lazytype, no key needed). Free 14-day trial, no credit card required.
+
+Q: Is there a free trial?
+A: Yes, 14 days, all features, no payment method required.
+
+Q: Does Lazytype work offline?
+A: Yes. Switch to the on-device engine (tray menu → Engine → Local) and no audio ever leaves your machine. Uses whisper.cpp locally.
+
+Q: How fast is Lazytype?
+A: Sub-second for short dictations. Groq runs Whisper large-v3-turbo at ~216x real-time, so a 3-second clip is transcribed in under 0.5 seconds.
+
+Q: Is my audio private?
+A: Audio is sent only to transcribe, never stored. On-device mode: nothing leaves the machine.
+
+Q: Does Lazytype translate?
+A: Yes. Enable translation in the tray menu, speak in one language, get text typed in another. Supports 100+ language pairs.
+
+Q: What is the best Wispr Flow alternative?
+A: Lazytype is a strong Wispr Flow alternative: cheaper (EUR 25 one-time vs USD 14/month), works on Windows (Wispr Flow is macOS-only), includes offline mode.
+
+Q: Does Lazytype work on Windows?
+A: Yes. Windows 10 and 11 are fully supported. A native Windows installer (.exe) is available for immediate download. This is a key advantage over Wispr Flow, Superwhisper, and AquaVoice, which are macOS-only.
+
+Q: Do I need a subscription?
+A: No. The Personal plan is a one-time EUR 25 purchase. You bring your own Groq API key, which has a generous free tier. The Pro plan (EUR 5/month) is available for those who prefer a managed service.
+
+Q: What API key do I need?
+A: A Groq API key for the default cloud engine. Groq offers a free tier that is more than sufficient for most personal use. No OpenAI account is required.
 
 ## Links
 
@@ -36,3 +107,6 @@
 - Best Wispr Flow alternatives (2026): https://lazytype.com/blog/best-wispr-flow-alternatives-2026/
 - How to dictate in any app on Windows: https://lazytype.com/blog/dictate-in-any-app-on-windows/
 - Voice to text without a subscription: https://lazytype.com/blog/voice-to-text-without-a-subscription/
+- Lazytype vs Wispr Flow: https://lazytype.com/blog/lazytype-vs-wispr-flow/
+- Lazytype vs Superwhisper: https://lazytype.com/blog/lazytype-vs-superwhisper/
+- Best dictation app for Mac: https://lazytype.com/blog/best-dictation-app-for-mac/
