@@ -763,61 +763,77 @@ def _keypicker(tk, parent, label, initial):
               font=UI_FONT, cursor="hand2", padx=4,
               command=lambda: (val.update(v="uit"), disp_var.set(_hk_display("uit")))).pack(side="left", padx=(2, 0))
 
-    # Keysym → generiek groep-label of exacte richting
-    _EXACT  = {"Control_R": "ctrl_r", "Control_L": "ctrl_l",
-                "Alt_R": "alt_r",     "Alt_L": "alt_l", "Shift_R": "shift_r"}
-    _GROUP  = {"Control_L": "ctrl",   "Control_R": "ctrl",
-               "Alt_L": "alt",        "Alt_R": "alt",
-               "Shift_L": "shift",    "Shift_R": "shift",
-               "Super_L": "win",      "Super_R": "win",
-               "Win_L": "win",        "Win_R": "win",
-               "Meta_L": "win",       "Meta_R": "win",
-               "F8": "f8",            "F9": "f9",   "F10": "f10"}
-    _held = set()
     _valid = {v for _, v in HOTKEY_CHOICES}
+
+    def _pynput_to_spec(keys):
+        """Zet een set pynput-keys om naar een hotkey-spec ('ctrl+win', 'ctrl_r', …)."""
+        from pynput.keyboard import Key as K
+        exact_map = {
+            K.ctrl_r:  "ctrl_r",  K.ctrl_l:  "ctrl_l",
+            K.alt_r:   "alt_r",   K.alt_l:   "alt_l",
+            K.shift_r: "shift_r",
+        }
+        order = ["ctrl", "win", "alt", "shift"]
+        group_hit = {}
+        for k in keys:
+            for g, members in MOD_GROUPS.items():
+                if k in members:
+                    canonical = "win" if g == "cmd" else g
+                    group_hit[canonical] = k
+                    break
+            else:
+                for fn in ("f8", "f9", "f10"):
+                    if k == getattr(K, fn, None):
+                        group_hit[fn] = k
+        unique = [g for g in order + ["f8", "f9", "f10"] if g in group_hit]
+        if not unique:
+            return None
+        if len(unique) == 1:
+            g = unique[0]
+            if g in ("f8", "f9", "f10"):
+                return g
+            for k in keys:
+                if k in exact_map:
+                    return exact_map[k]
+        return "+".join(g for g in order if g in group_hit) or None
 
     def _start():
         global _keypicking
         _keypicking = True
-        pressed.clear()   # gooi vaste toetsen weg zodat de listener straks schoon start
+        pressed.clear()
         btn.config(text="Druk nu…", state="disabled")
         disp_var.set("—")
-        _held.clear()
-        top = parent.winfo_toplevel()
-        top.focus_force()   # zorg dat het venster toetsenbordfocus heeft
 
-        def _kp(e):
-            _held.add(e.keysym)
+        _captured = set()
+        _done = [False]
 
-        def _kr(e):
+        def _on_press(key):
+            if not _done[0]:
+                _captured.add(key)
+
+        def _on_release(key):
             global _keypicking
-            held = _held | {e.keysym}
-            _held.discard(e.keysym)
-            top.unbind("<KeyPress>")
-            top.unbind("<KeyRelease>")
-            _keypicking = False
-            pressed.clear()   # reset na capture zodat listener schoon doorgaat
-            btn.config(text="Wijzig…", state="normal")
-            groups = {}
-            for ks in held:
-                g = _GROUP.get(ks)
-                if g:
-                    groups[g] = ks
-            if not groups:
-                disp_var.set(_hk_display(val["v"]))
-                return
-            if len(groups) == 1 and len(held) == 1:
-                ks0 = next(iter(held))
-                spec = _EXACT.get(ks0) or next(iter(groups))
-            else:
-                order = ["ctrl", "win", "alt", "shift"]
-                spec = "+".join(g for g in order if g in groups)
-            if spec in _valid:
-                val["v"] = spec
-            disp_var.set(_hk_display(val["v"]))
+            if _done[0]:
+                return False
+            _done[0] = True
+            spec = _pynput_to_spec(set(_captured) | {key})
 
-        top.bind("<KeyPress>", _kp)
-        top.bind("<KeyRelease>", _kr)
+            def _finish():
+                global _keypicking
+                _keypicking = False
+                pressed.clear()
+                btn.config(text="Wijzig…", state="normal")
+                if spec and spec in _valid:
+                    val["v"] = spec
+                disp_var.set(_hk_display(val["v"]))
+
+            try:
+                parent.winfo_toplevel().after(0, _finish)
+            except Exception:
+                _finish()
+            return False  # stop deze tijdelijke listener
+
+        keyboard.Listener(on_press=_on_press, on_release=_on_release).start()
 
     btn.config(command=_start)
     return lambda: val["v"]
