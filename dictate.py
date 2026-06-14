@@ -74,8 +74,8 @@ _DEFAULT_HOTKEY           = "ctrl+win" if IS_WIN else "ctrl_r"
 _DEFAULT_COMMAND_HOTKEY   = "ctrl_r"   if IS_WIN else "alt_r"
 _DEFAULT_TRANSLATE_HOTKEY = "win+alt"  if IS_WIN else "alt_r"
 
-HOTKEY_NAME = os.environ.get("DICTATE_HOTKEY", _DEFAULT_HOTKEY)
-LANGUAGE = os.environ.get("DICTATE_LANGUAGE", "nl")
+HOTKEY_NAME = os.environ.get("DICTATE_HOTKEY") or _DEFAULT_HOTKEY
+LANGUAGE = os.environ.get("DICTATE_LANGUAGE") or "nl"
 TRAILING_SPACE = os.environ.get("DICTATE_TRAILING_SPACE", "true").lower() in ("1", "true", "yes")
 RESTORE_CLIPBOARD = os.environ.get("DICTATE_RESTORE_CLIPBOARD", "true").lower() in ("1", "true", "yes")
 SAMPLE_RATE = 16000
@@ -97,9 +97,9 @@ API_URL = os.environ.get("LAZYTYPE_API", "https://lazytype.com/api/transcribe.ph
 # regel in dictionary.txt; wordt als `prompt` aan Whisper meegegeven (bias).
 DICTIONARY_FILE = ROOT / "dictionary.txt"
 # Tweede sneltoets voor command mode (selecteer tekst → spreek instructie).
-COMMAND_HOTKEY_NAME = os.environ.get("DICTATE_COMMAND_HOTKEY", _DEFAULT_COMMAND_HOTKEY)
-TRANSLATE_HOTKEY_NAME = os.environ.get("DICTATE_TRANSLATE_HOTKEY", _DEFAULT_TRANSLATE_HOTKEY)
-TRANSLATE_TARGET = os.environ.get("DICTATE_TRANSLATE_TARGET", "en")
+COMMAND_HOTKEY_NAME = os.environ.get("DICTATE_COMMAND_HOTKEY") or _DEFAULT_COMMAND_HOTKEY
+TRANSLATE_HOTKEY_NAME = os.environ.get("DICTATE_TRANSLATE_HOTKEY") or _DEFAULT_TRANSLATE_HOTKEY
+TRANSLATE_TARGET = os.environ.get("DICTATE_TRANSLATE_TARGET") or "en"
 
 
 def load_dictionary() -> list[str]:

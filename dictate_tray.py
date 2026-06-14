@@ -724,7 +724,7 @@ def _edit_file_action(path, title, label, default=""):
 def _dropdown(tk, parent, label, choices, current):
     cur = next((l for l, v in choices if v == current), choices[0][0])
     tk.Label(parent, text=label, bg=UI_PAPER, fg=UI_INK, font=UI_FONT, anchor="w").pack(fill="x", padx=18, pady=(10, 2))
-    var = tk.StringVar(value=cur)
+    var = tk.StringVar(master=parent, value=cur)
     om = tk.OptionMenu(parent, var, *[l for l, _ in choices])
     om.configure(bg="#ffffff", fg=UI_INK, font=UI_FONT, relief="flat", anchor="w",
                  highlightthickness=1, highlightbackground="#dedbd3", activebackground="#efecfd")
@@ -745,15 +745,42 @@ def _ghost_btn(tk, parent, text, cmd):
                      font=UI_FONT, cursor="hand2")
 
 
+_TK_KEY_TO_PART = {
+    "Control_R": ("ctrl", "ctrl_r"), "Control_L": ("ctrl", "ctrl_l"),
+    "Alt_R":     ("alt",  "alt_r"),  "Alt_L":     ("alt",  "alt_l"),
+    "Shift_R":   ("shift","shift_r"),
+    "Super_L":   ("win",  "win"),    "Super_R":   ("win",  "win"),
+    "Meta_L":    ("win",  "win"),    "Meta_R":    ("win",  "win"),
+    "F8": ("f8","f8"), "F9": ("f9","f9"), "F10": ("f10","f10"),
+}
+
+
+def _tk_syms_to_spec(syms):
+    """Zet een set Tkinter keysyms om naar een hotkey-spec ('ctrl+win', 'ctrl_r', …)."""
+    groups = {}
+    for s in syms:
+        if s in _TK_KEY_TO_PART:
+            g, exact = _TK_KEY_TO_PART[s]
+            if g not in groups:
+                groups[g] = exact
+    if not groups:
+        return None
+    if len(groups) == 1:
+        return list(groups.values())[0]
+    order = ["ctrl", "win", "alt", "shift", "f8", "f9", "f10"]
+    return "+".join(g for g in order if g in groups) or None
+
+
 def _keypicker(tk, parent, label, initial):
     """Druk-op-een-toets widget. Klik 'Wijzig…' → druk combo → sla op.
     Vervangt de dropdown voor sneltoetsen in Instellingen en onboarding."""
+    initial = initial or HOTKEY_CHOICES[0][1]
     val = {"v": initial}
     tk.Label(parent, text=label, bg=UI_PAPER, fg=UI_INK, font=UI_FONT,
              anchor="w").pack(fill="x", padx=18, pady=(10, 2))
     row = tk.Frame(parent, bg=UI_PAPER)
     row.pack(fill="x", padx=18)
-    disp_var = tk.StringVar(value=_hk_display(initial))
+    disp_var = tk.StringVar(master=parent, value=_hk_display(initial))
     tk.Label(row, textvariable=disp_var, bg="#ffffff", fg=UI_INK, font=UI_FONT,
              anchor="w", padx=10, pady=5, relief="flat",
              highlightthickness=1, highlightbackground="#dedbd3").pack(side="left", fill="x", expand=True)
@@ -798,6 +825,15 @@ def _keypicker(tk, parent, label, initial):
                     return exact_map[k]
         return "+".join(g for g in order if g in group_hit) or None
 
+    def _finish(spec):
+        global _keypicking
+        _keypicking = False
+        pressed.clear()
+        btn.config(text="Wijzig…", state="normal")
+        if spec and spec in _valid:
+            val["v"] = spec
+        disp_var.set(_hk_display(val["v"]))
+
     def _start():
         global _keypicking
         _keypicking = True
@@ -805,36 +841,56 @@ def _keypicker(tk, parent, label, initial):
         btn.config(text="Druk nu…", state="disabled")
         disp_var.set("—")
 
-        _captured = set()
-        _done = [False]
+        if IS_MAC:
+            # Op macOS: gebruik Tkinter-bindings (pynput vereist Accessibility-rechten
+            # en conflicteert met de Tk event-loop → crash).
+            toplevel = parent.winfo_toplevel()
+            _held = set()
+            _bid_p = [None]; _bid_r = [None]
 
-        def _on_press(key):
-            if not _done[0]:
-                _captured.add(key)
+            def _cleanup():
+                try:
+                    if _bid_p[0]: toplevel.unbind("<KeyPress>", _bid_p[0])
+                    if _bid_r[0]: toplevel.unbind("<KeyRelease>", _bid_r[0])
+                except Exception:
+                    pass
 
-        def _on_release(key):
-            global _keypicking
-            if _done[0]:
+            def _on_tk_press(event):
+                _held.add(event.keysym)
+
+            def _on_tk_release(event):
+                syms = set(_held) | {event.keysym}
+                _held.clear()
+                _cleanup()
+                spec = _tk_syms_to_spec(syms)
+                try:
+                    toplevel.after(0, lambda: _finish(spec))
+                except Exception:
+                    _finish(spec)
+
+            _bid_p[0] = toplevel.bind("<KeyPress>", _on_tk_press, add=True)
+            _bid_r[0] = toplevel.bind("<KeyRelease>", _on_tk_release, add=True)
+            toplevel.focus_force()
+        else:
+            _captured = set()
+            _done = [False]
+
+            def _on_press(key):
+                if not _done[0]:
+                    _captured.add(key)
+
+            def _on_release(key):
+                if _done[0]:
+                    return False
+                _done[0] = True
+                spec = _pynput_to_spec(set(_captured) | {key})
+                try:
+                    parent.winfo_toplevel().after(0, lambda: _finish(spec))
+                except Exception:
+                    _finish(spec)
                 return False
-            _done[0] = True
-            spec = _pynput_to_spec(set(_captured) | {key})
 
-            def _finish():
-                global _keypicking
-                _keypicking = False
-                pressed.clear()
-                btn.config(text="Wijzig…", state="normal")
-                if spec and spec in _valid:
-                    val["v"] = spec
-                disp_var.set(_hk_display(val["v"]))
-
-            try:
-                parent.winfo_toplevel().after(0, _finish)
-            except Exception:
-                _finish()
-            return False  # stop deze tijdelijke listener
-
-        keyboard.Listener(on_press=_on_press, on_release=_on_release).start()
+            keyboard.Listener(on_press=_on_press, on_release=_on_release).start()
 
     btn.config(command=_start)
     return lambda: val["v"]
