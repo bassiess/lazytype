@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-13         # Intel x86_64 — werkt op alle Macs (Rosetta op Apple Silicon)
+    runs-on: macos-latest     # Apple Silicon (arm64) — kortste wachtrij; Intel-Macs via Rosetta 2
     steps:
       - uses: actions/checkout@v4
 
