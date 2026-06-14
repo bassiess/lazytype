@@ -306,6 +306,7 @@ def handle_release():
         print(f"  ✅ ({dt:.2f}s) → {text}")
         state["last"] = text
         dictate.paste_text(text)
+        dictate.beep("done")
         if state.get("history"):
             dictate.add_history(text)
     except Exception as e:

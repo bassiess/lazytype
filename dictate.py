@@ -704,7 +704,7 @@ def paste_text(text: str):
 
 
 # ── Geluidsfeedback (cross-platform) ────────────────────────────────────
-_WIN_BEEP = {"start": (1050, 80), "stop": (540, 110), "done": (540, 110), "error": (330, 280)}
+_WIN_BEEP = {"start": (1050, 120), "stop": (540, 110), "done": (880, 120), "error": (330, 280)}
 _MAC_SOUND = {"start": "Tink", "stop": "Pop", "done": "Pop", "error": "Basso"}
 
 
