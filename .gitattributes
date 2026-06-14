@@ -1,0 +1,32 @@
+# Normaliseer lijneindes: sla altijd LF op in de repo
+* text=auto
+
+# Shell-scripts en Python MOETEN LF hebben — ook op Windows uitgecheckt
+*.sh    text eol=lf
+*.py    text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.xml   text eol=lf
+
+# Windows-batchbestanden houden CRLF
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binaire bestanden — niet aanraken
+*.exe   binary
+*.dmg   binary
+*.png   binary
+*.ico   binary
+*.icns  binary
+*.bin   binary
+*.wav   binary
+*.mp3   binary
+*.zip   binary
+*.dll   binary

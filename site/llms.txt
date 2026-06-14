@@ -1,0 +1,38 @@
+# Lazytype
+
+> Lazytype is a voice-to-text dictation app for Windows and macOS. You hold one key
+> (left Ctrl by default), speak, and let go. Clean, punctuated text is typed into
+> whatever app has focus: email, chat, documents, browsers, code editors. It runs
+> OpenAI's Whisper large-v3-turbo on Groq, returning a short sentence in under a second,
+> in 100+ languages, with optional AI clean-up and translation.
+
+## Key facts
+
+- Platforms: Windows 10/11 (available now), macOS (beta, builds from source).
+- Speed: powered by Groq Whisper large-v3-turbo, roughly 216x faster than real time; sub-second for short dictations.
+- Languages: 100+, auto-detected, with standout accuracy in English and Dutch.
+- Works in any app with a text field; pastes where the cursor is (Cmd+V on macOS).
+- Hotkey: hold-to-talk on left Ctrl, with a "modifier-safe" design so Ctrl+C and quick taps still work as normal shortcuts.
+- Voice commands: say "new line" or "new paragraph" to format hands-free.
+- AI clean-up & translate: optional pass removes filler words and stutters, fixes punctuation, or translates as you speak.
+- Privacy: audio is sent only to transcribe a clip and is not stored; an on-device (offline) engine is included.
+
+## Pricing
+
+- Personal: EUR 25 one-time license, bring your own free Groq API key.
+- Pro: monthly subscription, transcription hosted by Lazytype, no API key needed.
+- Free trial: 14 days, all features, no payment method required to start.
+
+## How it compares
+
+- Most rivals (Wispr Flow, Superwhisper, BossAI) are subscription-only at USD 9-15/month. Lazytype offers a rare one-time license option and an offline engine.
+
+## Links
+
+- Home: https://lazytype.com/
+- Pricing: https://lazytype.com/#pricing
+- Download (Windows): https://lazytype.com/downloads/Lazytype.exe
+- Blog: https://lazytype.com/blog/
+- Best Wispr Flow alternatives (2026): https://lazytype.com/blog/best-wispr-flow-alternatives-2026/
+- How to dictate in any app on Windows: https://lazytype.com/blog/dictate-in-any-app-on-windows/
+- Voice to text without a subscription: https://lazytype.com/blog/voice-to-text-without-a-subscription/

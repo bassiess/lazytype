@@ -1,0 +1,48 @@
+{
+  "currency": "EUR",
+  "symbol": "€",
+  "trial_days": 14,
+  "competitor": { "name": "Wispr Flow", "price_month": 13 },
+  "tiers": [
+    {
+      "id": "trial",
+      "name": "Gratis proef",
+      "price_once": 0,
+      "tagline": "14 dagen alles proberen",
+      "cta": "Download & probeer",
+      "features": [
+        "Alle functies, 14 dagen lang",
+        "Met je eigen (gratis) Groq-key",
+        "Geen betaalgegevens nodig"
+      ]
+    },
+    {
+      "id": "personal",
+      "name": "Personal",
+      "price_once": 25,
+      "tagline": "Eénmalig — voor altijd, eigen key",
+      "cta": "Koop Personal",
+      "features": [
+        "Voor altijd — geen abonnement",
+        "Je eigen (gratis) Groq-key",
+        "Alle functies: vertalen, opschonen, woordenboek, command mode, snippets",
+        "Windows & macOS"
+      ]
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "price_month": 5,
+      "highlight": true,
+      "tagline": "Abonnement — wij hosten alles",
+      "cta": "Start Pro",
+      "features": [
+        "Geen eigen key nodig (managed)",
+        "Alle Personal-functies",
+        "Wij regelen de transcriptie server-side",
+        "Altijd de nieuwste modellen",
+        "14 dagen gratis proberen"
+      ]
+    }
+  ]
+}

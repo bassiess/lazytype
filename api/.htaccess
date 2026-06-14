@@ -1,0 +1,11 @@
+# Bescherm gevoelige bestanden die in dezelfde map staan als de PHP-scripts.
+# Logbestanden, revocatielijst en config mogen NOOIT rechtstreeks opgehaald worden.
+<FilesMatch "^(issued\.log|revoked\.json|config\.php)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Allow,Deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

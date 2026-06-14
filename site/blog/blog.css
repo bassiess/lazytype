@@ -1,0 +1,106 @@
+/* Lazytype blog — shared styles (matches the main site) */
+:root{
+  --paper:#f7f6f3; --bg:#fbfaf8; --card:#ffffff;
+  --ink:#191a1e; --ink2:#3c4049; --muted:#6b6f7b; --faint:#9a9ea9;
+  --line:#e8e6e0; --line2:#dedbd3;
+  --accent:#5a46e0; --accent-ink:#4a37c8; --accent-soft:#efecfd; --ok:#1f9d57;
+  --serif:"Fraunces",Georgia,"Times New Roman",serif;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+  --shadow:0 1px 2px rgba(24,22,18,.04),0 12px 28px -12px rgba(24,22,18,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.7;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--accent-soft)}
+.wrap{max-width:1100px;margin:0 auto;padding:0 26px}
+
+/* nav (same as site) */
+header.nav{position:sticky;top:0;z-index:60;background:rgba(251,250,248,.8);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:18px;letter-spacing:-.01em}
+.brand img{width:28px;height:28px;border-radius:7px}
+.nav-mid{display:flex;gap:30px}
+.nav-mid a{color:var(--ink2);font-size:15px}
+.nav-mid a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:15px;font-weight:550;border-radius:10px;padding:11px 18px;border:1px solid transparent;transition:transform .14s,box-shadow .2s,border-color .2s}
+.btn-primary{background:var(--ink);color:#fff}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 24px -8px rgba(24,22,18,.45)}
+.btn-ghost{background:var(--card);border-color:var(--line2);color:var(--ink)}
+.btn-ghost:hover{border-color:var(--ink)}
+
+/* breadcrumb */
+.crumb{font-size:13.5px;color:var(--muted);padding:26px 0 0}
+.crumb a:hover{color:var(--ink)}
+
+/* article header */
+.post-head{max-width:720px;margin:0 auto;padding:34px 0 8px;text-align:center}
+.kicker{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);font-weight:600;margin-bottom:16px}
+.post-head h1{font-family:var(--serif);font-weight:400;font-size:clamp(30px,4.6vw,48px);line-height:1.07;letter-spacing:-.02em}
+.byline{display:flex;gap:10px;align-items:center;justify-content:center;color:var(--muted);font-size:14px;margin-top:22px}
+.byline .dot{width:3px;height:3px;border-radius:50%;background:var(--line2)}
+
+/* article body — readable measure */
+article.post{max-width:680px;margin:0 auto;padding:36px 0 20px}
+article.post > *{margin-bottom:22px}
+article.post .lede{font-size:20px;color:var(--ink2);line-height:1.6}
+article.post h2{font-family:var(--serif);font-weight:500;font-size:27px;letter-spacing:-.01em;margin-top:42px;line-height:1.15}
+article.post h3{font-size:19px;font-weight:600;margin-top:30px}
+article.post p{color:var(--ink2)}
+article.post a{color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
+article.post ul,article.post ol{padding-left:22px;color:var(--ink2)}
+article.post li{margin-bottom:9px}
+article.post strong{color:var(--ink);font-weight:600}
+article.post blockquote{border-left:3px solid var(--accent);padding:4px 0 4px 20px;color:var(--ink);font-family:var(--serif);font-size:21px}
+
+/* callout / answer box (BLUF) */
+.answer{background:var(--accent-soft);border:1px solid #e2ddfb;border-radius:14px;padding:20px 22px}
+.answer .lbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);font-weight:700;margin-bottom:6px}
+.answer p{color:var(--ink);margin:0}
+
+/* comparison table */
+.tbl{width:100%;border-collapse:collapse;font-size:14.5px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.tbl th,.tbl td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line)}
+.tbl th{background:var(--paper);font-weight:600;color:var(--ink);font-size:13px}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td:first-child{font-weight:600;color:var(--ink)}
+.tbl .yes{color:var(--ok);font-weight:600}
+.tbl .no{color:var(--faint)}
+
+/* in-article CTA */
+.cta-box{background:var(--ink);color:#fff;border-radius:18px;padding:30px 26px;text-align:center;margin:40px 0}
+.cta-box h3{font-family:var(--serif);font-weight:500;font-size:24px;color:#fff;margin-bottom:8px}
+.cta-box p{color:rgba(255,255,255,.72);margin-bottom:18px;font-size:15px}
+.cta-box .btn-primary{background:#fff;color:var(--ink)}
+
+/* faq */
+.post-faq{max-width:680px;margin:30px auto 0}
+.post-faq h2{font-family:var(--serif);font-weight:500;font-size:27px;margin-bottom:8px}
+.qa{border-bottom:1px solid var(--line)}
+.qa h3{font-size:17px;font-weight:600;padding:18px 0 6px;margin:0}
+.qa p{padding:0 0 18px;color:var(--ink2);font-size:15.5px;margin:0}
+
+/* blog index */
+.blog-hero{max-width:720px;margin:0 auto;text-align:center;padding:40px 0 10px}
+.blog-hero h1{font-family:var(--serif);font-weight:400;font-size:clamp(32px,5vw,52px);letter-spacing:-.02em}
+.blog-hero p{color:var(--ink2);font-size:18.5px;margin-top:14px}
+.post-list{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:920px;margin:44px auto 0}
+.post-card{display:block;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;transition:transform .25s,box-shadow .25s,border-color .25s}
+.post-card:hover{transform:translateY(-3px);box-shadow:var(--shadow);border-color:var(--line2)}
+.post-card .tag{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink);font-weight:600}
+.post-card h2{font-family:var(--serif);font-weight:500;font-size:22px;letter-spacing:-.01em;margin:10px 0 8px;line-height:1.2}
+.post-card p{color:var(--muted);font-size:14.5px}
+.post-card .meta{color:var(--faint);font-size:13px;margin-top:14px}
+
+/* footer */
+footer{border-top:1px solid var(--line);margin-top:70px;padding:40px 0}
+.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;align-items:center}
+.foot .tag{color:var(--muted);font-size:14px}
+.foot .links a{color:var(--ink2);font-size:14px;margin-left:20px}
+.foot .links a:hover{color:var(--ink)}
+
+@media(max-width:760px){
+  .nav-mid{display:none}
+  .post-list{grid-template-columns:1fr}
+}

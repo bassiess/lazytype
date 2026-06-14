@@ -1,0 +1,31 @@
+node_modules/
+uploads/
+tools/
+models/
+.env
+.playwright-mcp/
+*.zip
+
+# Python / PyInstaller
+__pycache__/
+build/
+dist/
+*.spec
+tray-preview.png
+icon-preview.png
+site/downloads/*.exe
+site/downloads/*.dmg
+
+# Owner-only: licentie-data en server-secrets — nooit committen/meeleveren
+admin_data/
+api/config.php
+api/revoked.json
+api/usage.log
+api/issued.log
+api/subs/
+api/state/
+_tmp_*
+
+# Persoonlijke gebruikersinhoud (woordenboek/snippets kunnen privégegevens bevatten)
+dictionary.txt
+snippets.txt

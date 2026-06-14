@@ -1,0 +1,62 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:          # handmatig starten via GitHub → Actions
+  push:
+    tags: ['v*']              # automatisch bij bijv. git tag v1.0.1 && git push --tags
+
+jobs:
+  build:
+    runs-on: macos-13         # Intel x86_64 — werkt op alle Macs (Rosetta op Apple Silicon)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installeer dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Genereer iconen
+        run: python dictate_tray.py --make-icons || true
+
+      - name: Bouw Lazytype.app
+        run: |
+          ICON_ARG=""
+          [ -f icon.icns ] && ICON_ARG="--icon icon.icns"
+          python -m PyInstaller --noconfirm --clean --windowed \
+            --name Lazytype \
+            $ICON_ARG \
+            --osx-bundle-identifier com.lazytype \
+            --collect-all sounddevice \
+            --collect-all pystray \
+            --hidden-import pynput.keyboard._darwin \
+            --hidden-import pynput.mouse._darwin \
+            dictate_tray.py
+
+      - name: Maak DMG
+        run: |
+          hdiutil create \
+            -volname "Lazytype" \
+            -srcfolder dist/Lazytype.app \
+            -ov -format UDZO \
+            dist/Lazytype.dmg
+
+      - name: Kopieer naar site/downloads
+        run: |
+          mkdir -p site/downloads
+          cp dist/Lazytype.dmg site/downloads/Lazytype.dmg
+
+      - name: Upload artifact (90 dagen beschikbaar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lazytype-macOS
+          path: dist/Lazytype.dmg
+          retention-days: 90
+
+      - name: Voeg toe aan GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Lazytype.dmg

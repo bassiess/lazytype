@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Lazytype — dicteren</title>
+<meta name="theme-color" content="#f7f6f3">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f7f6f3; --card:#fff; --ink:#191a1e; --ink2:#3c4049; --muted:#6b6f7b; --faint:#9a9ea9;
+    --line:#e8e6e0; --line2:#dedbd3; --accent:#5a46e0; --accent2:#4a37c8; --accent-soft:#efecfd;
+    --rec:#e0494a; --amber:#e7972a; --ok:#1f9d57;
+    --serif:"Fraunces",Georgia,serif; --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;
+       -webkit-font-smoothing:antialiased;min-height:100dvh;display:flex;flex-direction:column;
+       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:18px;letter-spacing:-.01em}
+  .brand img{width:28px;height:28px;border-radius:7px}
+  .gear{width:40px;height:40px;border:none;background:var(--card);border:1px solid var(--line2);border-radius:11px;
+        display:grid;place-items:center;cursor:pointer;color:var(--ink2)}
+  .gear svg{width:20px;height:20px}
+
+  main{flex:1;display:flex;flex-direction:column;align-items:center;gap:18px;padding:8px 18px 24px;width:100%;max-width:640px;margin:0 auto}
+  .status{font-size:14px;color:var(--muted);min-height:20px;text-align:center}
+  .status.err{color:var(--rec)}
+
+  .mic{position:relative;width:128px;height:128px;border-radius:50%;border:none;cursor:pointer;
+       background:var(--accent);color:#fff;display:grid;place-items:center;margin:10px 0 4px;
+       box-shadow:0 14px 36px -10px rgba(90,70,224,.55);transition:transform .12s,background .2s}
+  .mic:active{transform:scale(.96)}
+  .mic svg{width:52px;height:52px}
+  .mic.rec{background:var(--rec);box-shadow:0 14px 36px -10px rgba(224,73,74,.55);animation:pulse 1.4s infinite}
+  .mic.busy{background:var(--amber);box-shadow:none}
+  .mic.busy svg{animation:spin 1s linear infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(224,73,74,.45)}70%{box-shadow:0 0 0 22px rgba(224,73,74,0)}100%{box-shadow:0 0 0 0 rgba(224,73,74,0)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hint{font-size:13.5px;color:var(--faint)}
+
+  .out{width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;
+       font-size:16.5px;line-height:1.6;min-height:140px;resize:vertical;color:var(--ink);font-family:var(--sans);
+       outline:none}
+  .out:focus{border-color:var(--accent)}
+  .out::placeholder{color:var(--faint)}
+  .row{display:flex;gap:10px;width:100%}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;
+       font-size:15px;font-weight:550;border-radius:12px;padding:13px 20px;cursor:pointer;border:1px solid var(--line2);
+       background:var(--card);color:var(--ink)}
+  .row .btn{flex:1}                 /* alleen in de rij vullen; losse knop = inhoudsbreedte */
+  #clear{margin-top:2px;color:var(--muted)}
+  .btn svg{width:18px;height:18px}
+  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn:active{transform:translateY(1px)}
+
+  /* settings sheet */
+  .sheet-bg{position:fixed;inset:0;background:rgba(24,22,18,.4);opacity:0;pointer-events:none;transition:opacity .25s;z-index:40}
+  .sheet-bg.on{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--paper);border-radius:20px 20px 0 0;
+         padding:22px 20px calc(24px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform .28s cubic-bezier(.2,.8,.2,1);
+         z-index:50;max-width:640px;margin:0 auto;box-shadow:0 -12px 40px rgba(0,0,0,.18)}
+  .sheet.on{transform:none}
+  .sheet h2{font-family:var(--serif);font-weight:400;font-size:22px;margin-bottom:4px}
+  .sheet p.sub{color:var(--muted);font-size:13.5px;margin-bottom:16px}
+  label{display:block;font-size:13px;font-weight:600;color:var(--ink2);margin:14px 0 6px}
+  input,select{width:100%;font-family:inherit;font-size:15px;padding:12px;border:1px solid var(--line2);
+               border-radius:11px;background:var(--card);color:var(--ink);outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  .save{margin-top:20px;width:100%;background:var(--accent);color:#fff;border:none;border-radius:12px;
+        padding:14px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer}
+  .nolic{font-size:13px;color:var(--rec);margin-top:6px}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><img src="/favicon.png" alt=""> Lazytype</div>
+  <button class="gear" id="gear" aria-label="Instellingen">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.2.61.78 1.05 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</header>
+
+<main>
+  <div class="status" id="status">Tik op de microfoon en spreek</div>
+  <button class="mic" id="mic" aria-label="Opnemen">
+    <svg id="micIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+  </button>
+  <div class="hint" id="hint">tik = start · tik weer = stop</div>
+
+  <textarea class="out" id="out" placeholder="Je tekst verschijnt hier…" spellcheck="false"></textarea>
+  <div class="row">
+    <button class="btn" id="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Kopieer</button>
+    <button class="btn primary" id="share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4M12 2v14"/></svg> Deel</button>
+  </div>
+  <button class="btn" id="clear" style="max-width:160px">Wissen</button>
+</main>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet">
+  <h2>Instellingen</h2>
+  <p class="sub">Mobiel dicteren is een <b>Pro</b>-functie — wij hosten de transcriptie.</p>
+  <label for="lic">Pro-licentiesleutel</label>
+  <input id="lic" placeholder="LZT.…" autocapitalize="off" autocomplete="off" spellcheck="false">
+  <div class="nolic" id="nolic" style="display:none">Nog geen sleutel? Word Pro op <a href="/#pricing">lazytype.com</a>.</div>
+  <label for="lang">Taal (spreektaal)</label>
+  <select id="lang">
+    <option value="auto">Automatisch</option><option value="nl">Nederlands</option>
+    <option value="en">Engels</option><option value="de">Duits</option>
+    <option value="fr">Frans</option><option value="es">Spaans</option>
+  </select>
+  <label for="pp">Nabewerking</label>
+  <select id="pp">
+    <option value="off">Uit</option><option value="clean">Opschonen</option>
+    <option value="en">Vertaal → Engels</option><option value="nl">Vertaal → Nederlands</option>
+    <option value="de">Vertaal → Duits</option><option value="fr">Vertaal → Frans</option>
+  </select>
+  <button class="save" id="save">Opslaan</button>
+</div>
+
+<script>
+const API = '/api/transcribe.php';
+const $ = id => document.getElementById(id);
+const ls = { get:(k,d='')=>localStorage.getItem('lzt_'+k)??d, set:(k,v)=>localStorage.setItem('lzt_'+k,v) };
+function deviceId(){ let d=ls.get('device'); if(!d){ d=(crypto.randomUUID?crypto.randomUUID():Date.now()+''+Math.random()).replace(/\D/g,'').slice(0,16)||'mob'+Date.now(); ls.set('device',d);} return d; }
+
+// settings
+function openSheet(){ $('sheetBg').classList.add('on'); $('sheet').classList.add('on'); $('nolic').style.display = ls.get('license')?'none':'block'; }
+function closeSheet(){ $('sheetBg').classList.remove('on'); $('sheet').classList.remove('on'); }
+$('gear').onclick=openSheet; $('sheetBg').onclick=closeSheet;
+$('lic').value=ls.get('license'); $('lang').value=ls.get('lang','auto'); $('pp').value=ls.get('pp','off');
+$('save').onclick=()=>{ ls.set('license',$('lic').value.trim()); ls.set('lang',$('lang').value); ls.set('pp',$('pp').value); closeSheet(); setStatus('Opgeslagen ✓'); };
+
+function setStatus(t,err){ const s=$('status'); s.textContent=t; s.classList.toggle('err',!!err); }
+function setMic(state){
+  const m=$('mic'); m.classList.toggle('rec',state==='rec'); m.classList.toggle('busy',state==='busy');
+  $('hint').textContent = state==='rec'?'tik om te stoppen':state==='busy'?'transcriberen…':'tik = start · tik weer = stop';
+}
+
+// recording
+let mr, chunks=[], rec=false, stopTimer=null;
+async function start(){
+  if(!ls.get('license')){ openSheet(); return; }
+  let stream;
+  try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }
+  catch(e){ setStatus('Geen microfoon-toegang',true); return; }
+  chunks=[];
+  try{ mr=new MediaRecorder(stream); }catch(e){ mr=new MediaRecorder(stream,{mimeType:'audio/mp4'}); }
+  mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+  mr.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); await transcribe(new Blob(chunks,{type:mr.mimeType||'audio/webm'})); };
+  mr.start(); rec=true; setMic('rec'); setStatus('Aan het luisteren…');
+  stopTimer=setTimeout(stop, 60000); // veiligheidscap 60s
+}
+function stop(){ if(mr&&rec){ rec=false; clearTimeout(stopTimer); setMic('busy'); setStatus('Transcriberen…'); try{mr.stop()}catch(e){} } }
+$('mic').onclick=()=>{ rec?stop():start(); };
+
+async function transcribe(blob){
+  const t=blob.type||''; const ext = t.includes('mp4')||t.includes('mpeg')?'mp4':t.includes('ogg')?'ogg':t.includes('wav')?'wav':'webm';
+  const fd=new FormData();
+  fd.append('file', blob, 'audio.'+ext);
+  fd.append('license', ls.get('license'));
+  fd.append('device', deviceId());
+  fd.append('language', ls.get('lang','auto'));
+  fd.append('postprocess', ls.get('pp','off'));
+  try{
+    const r=await fetch(API,{method:'POST',body:fd});
+    let j={}; try{ j=await r.json(); }catch(e){}
+    setMic('idle');
+    if(!r.ok){ setStatus(j.error||('Fout '+r.status),true); return; }
+    const txt=(j.text||'').trim();
+    if(!txt){ setStatus('Niets verstaan — probeer opnieuw',true); return; }
+    const out=$('out'); out.value = out.value ? out.value.replace(/\s*$/,'')+' '+txt : txt;
+    setStatus('Klaar ✓');
+  }catch(e){ setMic('idle'); setStatus('Netwerkfout — probeer opnieuw',true); }
+}
+
+// actions
+$('copy').onclick=async()=>{ try{ await navigator.clipboard.writeText($('out').value); setStatus('Gekopieerd ✓'); }catch(e){ $('out').select(); document.execCommand('copy'); setStatus('Gekopieerd ✓'); } };
+$('share').onclick=async()=>{ const text=$('out').value.trim(); if(!text) return; if(navigator.share){ try{ await navigator.share({text}); }catch(e){} } else { $('copy').click(); } };
+$('clear').onclick=()=>{ $('out').value=''; setStatus('Tik op de microfoon en spreek'); };
+
+if(!ls.get('license')) setStatus('Open instellingen ⚙ en vul je Pro-sleutel in');
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>

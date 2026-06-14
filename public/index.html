@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lazytype — AI-transcriptie</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #181b25;
+    --panel-2: #1f2330;
+    --border: #2a2f40;
+    --text: #e8eaf2;
+    --muted: #9aa1b5;
+    --accent: #6c8cff;
+    --accent-2: #8f6cff;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --err: #f87171;
+    --rec: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 32px 16px 64px;
+  }
+  .wrap { width: 100%; max-width: 860px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  .logo {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-size: 20px;
+  }
+  h1 { font-size: 26px; letter-spacing: 0.5px; }
+  .tag {
+    font-size: 11px; padding: 3px 8px; border-radius: 99px;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  }
+  .sub { color: var(--muted); margin: 4px 0 24px; font-size: 14px; }
+
+  .status { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .pill {
+    font-size: 12px; padding: 5px 12px; border-radius: 99px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--err); }
+  .dot.on { background: var(--ok); }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px; margin-bottom: 20px;
+  }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab {
+    flex: 1; padding: 12px; text-align: center; cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--muted); font-size: 15px; font-family: inherit;
+  }
+  .tab.active {
+    background: linear-gradient(135deg, rgba(108,140,255,.18), rgba(143,108,255,.18));
+    border-color: var(--accent); color: var(--text); font-weight: 600;
+  }
+  .pane { display: none; }
+  .pane.active { display: block; }
+
+  .drop {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 48px 24px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--panel-2); }
+  .drop .big { font-size: 17px; margin-bottom: 6px; }
+  .drop .hint { color: var(--muted); font-size: 13px; }
+  .drop .icon { font-size: 34px; margin-bottom: 12px; }
+
+  .opts { display: flex; gap: 14px; margin-top: 18px; flex-wrap: wrap; align-items: flex-end; }
+  .opt { display: flex; flex-direction: column; gap: 6px; }
+  .opt label { font-size: 12px; color: var(--muted); }
+  select, button {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 12px; font-size: 14px; font-family: inherit;
+  }
+  select:focus { outline: 1px solid var(--accent); }
+  .check { display: flex; align-items: center; gap: 8px; padding: 9px 0; font-size: 14px; color: var(--muted); }
+
+  .progress { display: none; text-align: center; padding: 28px 0 10px; }
+  .progress.show { display: block; }
+  .spinner {
+    width: 36px; height: 36px; margin: 0 auto 14px;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .progress .label { font-size: 15px; }
+  .progress .elapsed { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  /* Live opname */
+  .live-controls { display: flex; align-items: center; gap: 20px; margin-bottom: 18px; }
+  .rec-btn {
+    width: 72px; height: 72px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-size: 28px; color: white;
+    transition: transform .1s;
+  }
+  .rec-btn:hover { transform: scale(1.05); }
+  .rec-btn.recording { background: var(--rec); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.45); }
+    50% { box-shadow: 0 0 0 16px rgba(239,68,68,0); }
+  }
+  .live-status .state { font-size: 16px; font-weight: 600; }
+  .live-status .detail { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  .live-box {
+    min-height: 160px; max-height: 380px; overflow-y: auto;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; font-size: 16px; line-height: 1.7;
+  }
+  .live-box .placeholder { color: var(--muted); font-size: 14px; }
+  .live-box .partial { color: var(--muted); font-style: italic; }
+  .live-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .live-actions button { cursor: pointer; }
+  .live-actions button:hover { border-color: var(--accent); }
+
+  .result { display: none; }
+  .result.show { display: block; }
+  .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .meta .pill strong { color: var(--text); font-weight: 600; }
+  .actions { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .actions button { cursor: pointer; }
+  .actions button:hover { border-color: var(--accent); }
+  .actions .primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: none; font-weight: 600; }
+
+  .segments { display: flex; flex-direction: column; gap: 2px; max-height: 480px; overflow-y: auto; }
+  .seg { display: flex; gap: 14px; padding: 9px 12px; border-radius: 8px; }
+  .seg:hover { background: var(--panel-2); }
+  .seg .time { color: var(--accent); font-size: 12px; font-family: Consolas, monospace; white-space: nowrap; padding-top: 2px; }
+  .seg .txt { font-size: 15px; line-height: 1.5; }
+  .plain { display: none; font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
+
+  .error {
+    display: none; background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.35);
+    color: var(--err); border-radius: 10px; padding: 14px 16px; font-size: 14px; margin-bottom: 20px;
+  }
+  .error.show { display: block; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">🎙️</div>
+    <h1>Lazytype</h1>
+    <span class="tag">techniek-POC · stap 2</span>
+  </header>
+  <p class="sub">Upload audio of video, of spreek live in — transcript met timestamps, lokaal of via de OpenAI API.</p>
+
+  <div class="status" id="status">
+    <span class="pill"><span class="dot" id="dotLocal"></span> Lokale engine <span id="localModel"></span></span>
+    <span class="pill"><span class="dot" id="dotOpenai"></span> OpenAI API</span>
+    <span class="pill"><span class="dot" id="dotLive"></span> Live engine</span>
+  </div>
+
+  <div class="error" id="error"></div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" id="tabUpload">📂 Bestand uploaden</button>
+      <button class="tab" id="tabLive">🎙️ Live opnemen</button>
+    </div>
+
+    <div class="opts" style="margin: 0 0 20px;">
+      <div class="opt">
+        <label for="engine">Engine</label>
+        <select id="engine">
+          <option value="local">Lokaal (whisper.cpp)</option>
+          <option value="openai">OpenAI API (whisper-1)</option>
+        </select>
+      </div>
+      <div class="opt" id="modelOpt">
+        <label for="model">Kwaliteit (lokaal model)</label>
+        <select id="model"></select>
+      </div>
+      <div class="opt">
+        <label for="language">Taal van de opname</label>
+        <select id="language">
+          <option value="auto">🌐 Automatisch detecteren</option>
+          <option value="nl">Nederlands</option>
+          <option value="en">Engels</option>
+          <option value="de">Duits</option>
+          <option value="fr">Frans</option>
+          <option value="es">Spaans</option>
+          <option value="it">Italiaans</option>
+          <option value="pt">Portugees</option>
+          <option value="pl">Pools</option>
+          <option value="tr">Turks</option>
+          <option value="ar">Arabisch</option>
+          <option value="zh">Chinees</option>
+          <option value="ja">Japans</option>
+        </select>
+      </div>
+      <div class="opt" id="translateOpt">
+        <label>&nbsp;</label>
+        <label class="check"><input type="checkbox" id="translate"> Vertaal naar Engels</label>
+      </div>
+    </div>
+
+    <div class="pane active" id="paneUpload">
+      <div class="drop" id="drop">
+        <div class="icon">📂</div>
+        <div class="big">Sleep je bestand hierheen, of klik om te bladeren</div>
+        <div class="hint">MP3, WAV, M4A, MP4, WEBM · tot 1 GB</div>
+        <input type="file" id="file" hidden accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac,audio/*,video/*">
+      </div>
+
+      <div class="progress" id="progress">
+        <div class="spinner"></div>
+        <div class="label" id="progressLabel">Bezig met transcriberen…</div>
+        <div class="elapsed" id="elapsed"></div>
+      </div>
+    </div>
+
+    <div class="pane" id="paneLive">
+      <div class="live-controls">
+        <button class="rec-btn" id="recBtn" title="Start/stop opname">🎙️</button>
+        <div class="live-status">
+          <div class="state" id="liveState">Klaar om op te nemen</div>
+          <div class="detail" id="liveDetail">Klik op de microfoon en geef toegang tot je microfoon</div>
+        </div>
+      </div>
+      <div class="live-box" id="liveBox">
+        <span class="placeholder" id="livePlaceholder">Hier verschijnt je tekst terwijl je spreekt…</span>
+        <span id="liveCommitted"></span>
+        <span class="partial" id="livePartial"></span>
+      </div>
+      <div class="live-actions">
+        <button id="btnLiveCopy">📋 Kopieer tekst</button>
+        <button id="btnLiveTxt">⬇️ Download .txt</button>
+        <button id="btnLiveClear">🗑️ Wis tekst</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card result" id="result">
+    <div class="meta" id="meta"></div>
+    <div class="actions">
+      <button class="primary" id="btnCopy">📋 Kopieer tekst</button>
+      <button id="btnTxt">⬇️ Download .txt</button>
+      <button id="btnSrt">⬇️ Download .srt</button>
+      <button id="btnToggle">🕒 Toon zonder timestamps</button>
+    </div>
+    <div class="segments" id="segments"></div>
+    <div class="plain" id="plain"></div>
+  </div>
+
+  <footer>Lazytype POC — engine-abstractie over whisper.cpp (lokaal, gratis) en OpenAI Whisper API.</footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let lastResult = null;
+let timerInterval = null;
+
+function modelLabel(file, sizeMB) {
+  const names = [
+    [/large-v3-turbo/, "Beste kwaliteit · turbo"],
+    [/large/, "Beste kwaliteit · large"],
+    [/medium/, "Hoog · medium"],
+    [/small/, "Gebalanceerd · small"],
+    [/base/, "Snel · base"],
+    [/tiny/, "Snelst · tiny"],
+  ];
+  const hit = names.find(([re]) => re.test(file));
+  return (hit ? hit[1] : file) + ` (${sizeMB} MB)`;
+}
+
+async function loadStatus() {
+  try {
+    const r = await fetch("/api/status");
+    const s = await r.json();
+    $("dotLocal").classList.toggle("on", s.engines.local.available);
+    $("dotOpenai").classList.toggle("on", s.engines.openai.available);
+    $("dotLive").classList.toggle("on", s.live.local || s.live.openai);
+    if (s.engines.local.model) $("localModel").textContent = "· " + s.engines.local.model;
+    if (s.live.model) $("dotLive").parentElement.lastChild.textContent = ` Live engine · ${s.live.model}`;
+    if (!s.engines.openai.available) {
+      const opt = $("engine").querySelector('option[value="openai"]');
+      if (!opt.textContent.includes("geen API-key")) opt.textContent += " — geen API-key";
+    }
+    // modelkeuze vullen (grootste = beste = standaard)
+    const models = s.engines.local.models || [];
+    if (models.length && $("model").options.length !== models.length) {
+      $("model").innerHTML = models
+        .map((m) => `<option value="${m.file}">${modelLabel(m.file, m.sizeMB)}</option>`)
+        .join("");
+      $("model").value = models[models.length - 1].file;
+    }
+  } catch { /* server nog niet klaar */ }
+}
+loadStatus();
+// live engine wordt enkele seconden na serverstart pas 'ready'
+setTimeout(loadStatus, 4000);
+
+/* ── Tabs ───────────────────────────────────────────── */
+function setTab(live) {
+  $("tabUpload").classList.toggle("active", !live);
+  $("tabLive").classList.toggle("active", live);
+  $("paneUpload").classList.toggle("active", !live);
+  $("paneLive").classList.toggle("active", live);
+  // vertalen geldt (voorlopig) alleen voor uploads
+  $("translate").disabled = live;
+  $("translateOpt").style.opacity = live ? 0.4 : 1;
+  updateModelOpt(live);
+}
+
+// modelkeuze geldt alleen voor lokale uploads; live heeft een vast (sneller) model
+function updateModelOpt(liveTab = $("tabLive").classList.contains("active")) {
+  const show = !liveTab && $("engine").value === "local";
+  $("modelOpt").style.display = show ? "" : "none";
+}
+$("engine").addEventListener("change", () => updateModelOpt());
+$("tabUpload").addEventListener("click", () => setTab(false));
+$("tabLive").addEventListener("click", () => setTab(true));
+
+/* ── Upload-flow ────────────────────────────────────── */
+const drop = $("drop");
+drop.addEventListener("click", () => $("file").click());
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault(); drop.classList.remove("over");
+  if (e.dataTransfer.files.length) transcribe(e.dataTransfer.files[0]);
+});
+$("file").addEventListener("change", () => {
+  if ($("file").files.length) transcribe($("file").files[0]);
+});
+
+function fmtTime(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+  return (h ? String(h).padStart(2, "0") + ":" : "") + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+
+function showError(msg) {
+  $("error").textContent = "⚠️ " + msg;
+  $("error").classList.add("show");
+}
+
+async function transcribe(file) {
+  $("error").classList.remove("show");
+  $("result").classList.remove("show");
+  $("progress").classList.add("show");
+  $("progressLabel").textContent = `"${file.name}" wordt getranscribeerd…`;
+
+  const t0 = Date.now();
+  timerInterval = setInterval(() => {
+    $("elapsed").textContent = `Bezig: ${Math.round((Date.now() - t0) / 1000)}s` +
+      ($("engine").value === "local" ? " (lokaal op CPU — even geduld)" : "");
+  }, 500);
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("engine", $("engine").value);
+  form.append("language", $("language").value);
+  form.append("translate", $("translate").checked ? "true" : "false");
+  if ($("engine").value === "local" && $("model").value) form.append("model", $("model").value);
+
+  try {
+    const r = await fetch("/api/transcribe", { method: "POST", body: form });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Onbekende fout");
+    lastResult = data;
+    renderResult(data);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    clearInterval(timerInterval);
+    $("progress").classList.remove("show");
+    $("file").value = "";
+  }
+}
+
+function renderResult(data) {
+  const langNames = { nl: "Nederlands", en: "Engels", de: "Duits", fr: "Frans", es: "Spaans", it: "Italiaans", pt: "Portugees", pl: "Pools", tr: "Turks", ar: "Arabisch", zh: "Chinees", ja: "Japans" };
+  $("meta").innerHTML = `
+    <span class="pill">📄 <strong>${data.fileName}</strong></span>
+    <span class="pill">🌐 Taal: <strong>${langNames[data.language] || data.language}</strong></span>
+    ${data.durationSec ? `<span class="pill">⏱️ Audio: <strong>${fmtTime(data.durationSec)}</strong></span>` : ""}
+    <span class="pill">⚡ Verwerkt in <strong>${Math.round(data.processingSec)}s</strong></span>
+    <span class="pill">🤖 <strong>${data.engine === "local" ? "Lokaal · " + data.model : "OpenAI · " + data.model}</strong></span>`;
+
+  $("segments").innerHTML = data.segments.map((s) =>
+    `<div class="seg"><span class="time">${fmtTime(s.start)}</span><span class="txt">${escapeHtml(s.text)}</span></div>`
+  ).join("");
+  $("plain").textContent = data.text;
+  $("result").classList.add("show");
+  $("result").scrollIntoView({ behavior: "smooth" });
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+$("btnToggle").addEventListener("click", () => {
+  const showingSegs = $("segments").style.display !== "none";
+  $("segments").style.display = showingSegs ? "none" : "flex";
+  $("plain").style.display = showingSegs ? "block" : "none";
+  $("btnToggle").textContent = showingSegs ? "🕒 Toon met timestamps" : "🕒 Toon zonder timestamps";
+});
+
+$("btnCopy").addEventListener("click", async () => {
+  if (!lastResult) return;
+  await navigator.clipboard.writeText(lastResult.text);
+  $("btnCopy").textContent = "✅ Gekopieerd!";
+  setTimeout(() => ($("btnCopy").textContent = "📋 Kopieer tekst"), 1500);
+});
+
+function download(name, content) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$("btnTxt").addEventListener("click", () => {
+  if (!lastResult) return;
+  download(baseName() + ".txt", lastResult.text);
+});
+
+$("btnSrt").addEventListener("click", () => {
+  if (!lastResult) return;
+  const srt = lastResult.segments.map((s, i) => {
+    return `${i + 1}\n${srtTime(s.start)} --> ${srtTime(s.end)}\n${s.text}\n`;
+  }).join("\n");
+  download(baseName() + ".srt", srt);
+});
+
+function srtTime(sec) {
+  const h = String(Math.floor(sec / 3600)).padStart(2, "0");
+  const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+  const s = String(Math.floor(sec % 60)).padStart(2, "0");
+  const ms = String(Math.round((sec % 1) * 1000)).padStart(3, "0");
+  return `${h}:${m}:${s},${ms}`;
+}
+
+function baseName() {
+  return (lastResult.fileName || "transcript").replace(/\.[^.]+$/, "");
+}
+
+/* ── Live opname ────────────────────────────────────── */
+const live = {
+  active: false,
+  ws: null,
+  ctx: null,
+  stream: null,
+  node: null,
+  source: null,
+  startedAt: 0,
+  timer: null,
+  floatQueue: [],   // Float32-samples wachtend op verzending
+  queued: 0,
+};
+
+$("recBtn").addEventListener("click", () => (live.active ? stopLive() : startLive()));
+
+async function startLive() {
+  $("error").classList.remove("show");
+  try {
+    live.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+  } catch {
+    showError("Geen toegang tot de microfoon. Sta microfoongebruik toe en probeer opnieuw.");
+    return;
+  }
+
+  const params = new URLSearchParams({ engine: $("engine").value, language: $("language").value });
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  live.ws = new WebSocket(`${proto}://${location.host}/ws/live?${params}`);
+  live.ws.binaryType = "arraybuffer";
+
+  live.ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "partial") {
+      $("livePartial").textContent = " " + msg.text;
+    } else if (msg.type === "committed") {
+      if (msg.text) $("liveCommitted").textContent += (($("liveCommitted").textContent ? " " : "") + msg.text);
+      $("livePartial").textContent = "";
+    } else if (msg.type === "done") {
+      $("livePartial").textContent = "";
+    } else if (msg.type === "error") {
+      showError("Live: " + msg.message);
+    }
+    $("livePlaceholder").style.display = "none";
+    $("liveBox").scrollTop = $("liveBox").scrollHeight;
+  };
+  live.ws.onerror = () => showError("WebSocket-verbinding mislukt.");
+
+  // AudioContext op 16kHz — Chrome/Edge resamplen zelf; zo niet, dan doen wij het
+  live.ctx = new AudioContext({ sampleRate: 16000 });
+  await live.ctx.audioWorklet.addModule("/recorder-worklet.js");
+  live.source = live.ctx.createMediaStreamSource(live.stream);
+  live.node = new AudioWorkletNode(live.ctx, "pcm-capture");
+  live.source.connect(live.node);
+
+  const ratio = live.ctx.sampleRate / 16000;
+  live.node.port.onmessage = (e) => {
+    if (!live.active) return;
+    let samples = e.data;
+    if (ratio !== 1) samples = downsample(samples, ratio);
+    live.floatQueue.push(samples);
+    live.queued += samples.length;
+    if (live.queued >= 4000) flushAudio(); // ±250ms per pakketje
+  };
+
+  live.active = true;
+  live.startedAt = Date.now();
+  $("recBtn").classList.add("recording");
+  $("recBtn").textContent = "⏹️";
+  $("liveState").textContent = "Aan het opnemen…";
+  live.timer = setInterval(() => {
+    $("liveDetail").textContent = `${fmtTime((Date.now() - live.startedAt) / 1000)} · ${$("engine").value === "local" ? "lokale engine" : "OpenAI"} · spreek rustig en duidelijk`;
+  }, 500);
+}
+
+function downsample(float32, ratio) {
+  const outLen = Math.floor(float32.length / ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) out[i] = float32[Math.floor(i * ratio)];
+  return out;
+}
+
+function flushAudio() {
+  if (!live.ws || live.ws.readyState !== 1 || !live.queued) return;
+  const all = new Float32Array(live.queued);
+  let off = 0;
+  for (const c of live.floatQueue) { all.set(c, off); off += c.length; }
+  live.floatQueue = [];
+  live.queued = 0;
+  const int16 = new Int16Array(all.length);
+  for (let i = 0; i < all.length; i++) {
+    const s = Math.max(-1, Math.min(1, all[i]));
+    int16[i] = s * 32767;
+  }
+  live.ws.send(int16.buffer);
+}
+
+function stopLive() {
+  live.active = false;
+  flushAudio();
+  if (live.ws && live.ws.readyState === 1) live.ws.send(JSON.stringify({ type: "stop" }));
+  clearInterval(live.timer);
+  live.node?.disconnect();
+  live.source?.disconnect();
+  live.stream?.getTracks().forEach((t) => t.stop());
+  live.ctx?.close();
+  $("recBtn").classList.remove("recording");
+  $("recBtn").textContent = "🎙️";
+  $("liveState").textContent = "Opname gestopt";
+  $("liveDetail").textContent = "De laatste zinnen worden nog verwerkt… Klik op de microfoon voor een nieuwe opname.";
+}
+
+$("btnLiveCopy").addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("liveCommitted").textContent.trim());
+  $("btnLiveCopy").textContent = "✅ Gekopieerd!";
+  setTimeout(() => ($("btnLiveCopy").textContent = "📋 Kopieer tekst"), 1500);
+});
+$("btnLiveTxt").addEventListener("click", () => {
+  download("live-transcript.txt", $("liveCommitted").textContent.trim());
+});
+$("btnLiveClear").addEventListener("click", () => {
+  $("liveCommitted").textContent = "";
+  $("livePartial").textContent = "";
+  $("livePlaceholder").style.display = "";
+});
+</script>
+</body>
+</html>

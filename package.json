@@ -1,0 +1,15 @@
+{
+  "name": "lazytype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI-transcriptieplatform (proof of concept) — upload audio/video, krijg een transcript met timestamps. Lokale whisper.cpp-engine of OpenAI API.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.0.1",
+    "ws": "^8.21.0"
+  }
+}
