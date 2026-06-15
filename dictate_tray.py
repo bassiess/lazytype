@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.3"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -941,7 +941,7 @@ def open_dashboard(start_tab="instellingen"):
     root.configure(bg=UI_PAPER)
     root.attributes("-topmost", True)
     root.resizable(False, False)
-    W, H = 500, 500
+    W, H = 500, 640
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
 
@@ -1038,19 +1038,6 @@ def open_dashboard(start_tab="instellingen"):
     # ── TAB: Instellingen ─────────────────────────────────────────────────
     inst = tab_frames["instellingen"]
 
-    scr_frame = tk.Frame(inst, bg=UI_PAPER)
-    scr_frame.pack(fill="both", expand=True)
-
-    section(scr_frame, "Sneltoetsen")
-    g_dict = _keypicker(tk, scr_frame, "Dicteren — houd in en spreek", state["hotkey_name"])
-    g_cmd  = _keypicker(tk, scr_frame, "Command — selecteer tekst + spreek instructie", state["hotkey_command"])
-    g_tr   = _keypicker(tk, scr_frame, "Vertalen — dicteren + meteen vertalen", state["hotkey_translate"])
-    divider(scr_frame)
-    section(scr_frame, "Taal & Engine")
-    g_lang = _dropdown(tk, scr_frame, "Spreektaal", SPOKEN_CHOICES, state["language"])
-    g_tgt  = _dropdown(tk, scr_frame, "Vertaal naar", LANG_CHOICES, state["translate_target"])
-    g_eng  = _dropdown(tk, scr_frame, "Engine", ENGINE_CHOICES, state["engine"])
-
     def save_settings():
         global _keypicking
         _keypicking = False
@@ -1074,10 +1061,26 @@ def open_dashboard(start_tab="instellingen"):
             refresh()
         root.destroy()
 
-    btn_bar = tk.Frame(scr_frame, bg=UI_PAPER)
-    btn_bar.pack(fill="x", padx=20, pady=16)
+    # Save-balk altijd onderaan vastgepind (buiten de scroll-content)
+    btn_bar = tk.Frame(inst, bg=UI_PAPER)
+    btn_bar.pack(side="bottom", fill="x", padx=20, pady=12)
+    tk.Frame(inst, bg=UI_LINE, height=1).pack(side="bottom", fill="x")
     _accent_btn(tk, btn_bar, "Opslaan", save_settings).pack(side="right")
     _ghost_btn(tk, btn_bar, "Annuleren", root.destroy).pack(side="right", padx=(0, 8))
+
+    # Scrollbare inhoud
+    scr_frame = tk.Frame(inst, bg=UI_PAPER)
+    scr_frame.pack(fill="both", expand=True)
+
+    section(scr_frame, "Sneltoetsen")
+    g_dict = _keypicker(tk, scr_frame, "Dicteren — houd in en spreek", state["hotkey_name"])
+    g_cmd  = _keypicker(tk, scr_frame, "Command — selecteer tekst + spreek instructie", state["hotkey_command"])
+    g_tr   = _keypicker(tk, scr_frame, "Vertalen — dicteren + meteen vertalen", state["hotkey_translate"])
+    divider(scr_frame)
+    section(scr_frame, "Taal & Engine")
+    g_lang = _dropdown(tk, scr_frame, "Spreektaal", SPOKEN_CHOICES, state["language"])
+    g_tgt  = _dropdown(tk, scr_frame, "Vertaal naar", LANG_CHOICES, state["translate_target"])
+    g_eng  = _dropdown(tk, scr_frame, "Engine", ENGINE_CHOICES, state["engine"])
 
     # ── TAB: Over & Update ────────────────────────────────────────────────
     ov = tab_frames["over"]
@@ -1610,33 +1613,24 @@ def build_menu():
 # Layout: [4 bars] | [nl] [→en alleen als actief] [⚙]
 # Idle: bars vlak op 3px · Opnemen: bars animeren · Transcriberen: bars bevriezen (amber)
 class Overlay:
-    # Pill achtergrond per staat
-    PILL      = "#0d0e13"
-    PILL_REC  = "#1d0e0f"   # subtiele rode tint
-    PILL_BSY  = "#181309"   # subtiele amber tint
-    BORDER    = "#1c1d26"
-    BDR_REC   = "#3a1a1c"
-    BDR_BSY   = "#2e2710"
-    # Bars
-    BAR_IDLE  = "#252637"   # heel dim bij rust
-    BAR_REC   = "#c4baff"   # helder wit-violet bij opnemen
-    BAR_BSY   = "#7a5c14"   # amber bij transcriberen
-    # Chips
-    CHIP_BG   = "#17182200"; CHIP_FG = "#50526a"   # lang-chip
-    TL_BG     = "#13122500"; TL_FG   = "#6250c8"   # translate-chip (violet)
-    SEP       = "#1c1d28"
-    GEAR      = "#2c2d3e"
+    PILL     = "#0d0e13"
+    PILL_REC = "#130d1a"
+    PILL_BSY = "#110d18"
+    BORDER   = "#1c1426"
+    BAR_IDLE = "#4c1d95"   # dim paars bij rust
+    BAR_REC  = "#c084fc"   # helder paars bij opnemen
+    BAR_BSY  = "#7c3aed"   # middel paars bij transcriberen
 
-    W_BASE = 138   # breedte zonder translate-chip
-    W_TL   = 176   # breedte met translate-chip
-    H      = 34
+    W = 84    # 8 bars
+    H = 36
 
     def __init__(self):
         self.root = None; self.thread = None; self.cv = None
         self._t = 0; self._sm = 0.0
-        self._bar_h = [3.0, 3.0, 3.0, 3.0]   # huidige bar-hoogten (smooth)
-        self._frozen = [5.0, 9.0, 6.0, 8.0]   # bevroren bij transcriberen
+        self._bar_h = [1.5] * 8
+        self._frozen = [2.0, 8.0, 4.0, 11.0, 3.0, 9.0, 5.0, 7.0]
         self._chips = []; self._drag = None; self._moved = False
+        self._alpha = 0.25
 
     def start(self):
         if self.thread and self.thread.is_alive():
@@ -1665,13 +1659,12 @@ class Overlay:
             root.attributes("-transparentcolor", transp)
         except Exception:
             transp = self.PILL; root.configure(bg=transp)
-        try: root.attributes("-alpha", 0.96)
+        try: root.attributes("-alpha", 0.25)
         except Exception: pass
-        self.W = self.W_BASE
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.geometry(f"{self.W}x{self.H}+{(sw - self.W) // 2}+{sh - self.H - 60}")
         self.cv = tk.Canvas(root, width=self.W, height=self.H,
-                            highlightthickness=0, bg=transp)
+                            highlightthickness=0, bg=transp, cursor="hand2")
         self.cv.pack()
         self.cv.bind("<ButtonPress-1>",   self._press)
         self.cv.bind("<B1-Motion>",       self._motion)
@@ -1709,18 +1702,7 @@ class Overlay:
     def _draw(self):
         cv = self.cv; cv.delete("all")
         self._chips = []
-        ph  = "recording" if state["phase"] == "arming" else current_phase()
-        pp  = state.get("postprocess", "off")
-        has_tl = (pp != "off")
-
-        # Pas venstergrootte aan als translate-chip aan/uit gaat
-        target_W = self.W_TL if has_tl else self.W_BASE
-        if target_W != self.W and self.root:
-            old_cx = self.root.winfo_x() + self.W // 2
-            self.W  = target_W
-            new_x   = max(0, old_cx - target_W // 2)
-            self.root.geometry(f"{target_W}x{self.H}+{new_x}+{self.root.winfo_y()}")
-            self.cv.config(width=target_W)
+        ph = "recording" if state["phase"] == "arming" else current_phase()
         W, H = self.W, self.H
         cy = H // 2
 
@@ -1728,51 +1710,42 @@ class Overlay:
         self._sm += (recorder.last_level - self._sm) * 0.35
         lv = self._sm
 
-        # Bar-hoogte bijwerken
+        # Bar-hoogtes — elke bar eigen tempo + fase voor organisch gevoel
+        _freqs  = [0.43, 0.55, 0.38, 0.62, 0.48, 0.52, 0.41, 0.58]
+        _phases = [0.0,  0.9,  1.8,  2.7,  3.6,  4.5,  5.4,  6.3]
         if ph == "recording":
-            for i in range(4):
-                f = 0.3 + 0.7 * abs(math.sin(self._t * 0.48 + i * 0.9))
-                target = 3 + lv * 16 * f + abs(math.sin(self._t * 0.22 + i * 1.4)) * 2
-                self._bar_h[i] += (min(target, 14.0) - self._bar_h[i]) * 0.35
-                self._frozen[i]  = self._bar_h[i]        # sla op voor freeze
-        elif ph != "working":                              # idle / disabled
-            for i in range(4):
-                self._bar_h[i] += (3.0 - self._bar_h[i]) * 0.18   # ease naar rust
+            for i in range(8):
+                osc    = 0.25 + 0.75 * abs(math.sin(self._t * _freqs[i] + _phases[i]))
+                target = 2.0 + lv * 28 * osc + abs(math.sin(self._t * _freqs[i] * 0.6 + i)) * 5
+                target = min(target, H - 4)
+                # Snel omhoog, trager omlaag → punchy aanslag
+                speed  = 0.55 if target > self._bar_h[i] else 0.22
+                self._bar_h[i] += (target - self._bar_h[i]) * speed
+                self._frozen[i] = self._bar_h[i]
+        elif ph != "working":
+            # Zachte adem-puls bij rust zodat bars leven hebben
+            for i in range(8):
+                idle = 1.5 + 0.6 * abs(math.sin(self._t * 0.04 + _phases[i] * 0.4))
+                self._bar_h[i] += (idle - self._bar_h[i]) * 0.06
 
-        # Pill achtergrond + rand
-        bg     = self.PILL_REC if ph == "recording" else self.PILL_BSY if ph == "working" else self.PILL
-        border = self.BDR_REC  if ph == "recording" else self.BDR_BSY  if ph == "working" else self.BORDER
-        self._pill(2, 2, W-2, H-2, 14, border)
+        # Venster-alpha: 25% rust → 100% actief
+        target_alpha = 1.0 if ph in ("recording", "working") else 0.25
+        self._alpha += (target_alpha - self._alpha) * 0.15
+        try: self.root.attributes("-alpha", round(self._alpha, 3))
+        except Exception: pass
+
+        # Pill
+        bg = self.PILL_REC if ph == "recording" else self.PILL_BSY if ph == "working" else self.PILL
+        self._pill(2, 2, W-2, H-2, 14, self.BORDER)
         self._pill(3, 3, W-3, H-3, 13, bg)
 
-        # 4 bars
+        # 8 paarse verticale bars — puntige stippen bij rust, grote balken bij spreken
         bar_col = self.BAR_REC if ph == "recording" else self.BAR_BSY if ph == "working" else self.BAR_IDLE
-        CENTERS = [10.5, 15.0, 19.5, 24.0]   # x-posities, 2.5px breed, 2px gap
+        CENTERS = [9.0, 19.0, 29.0, 39.0, 45.0, 55.0, 65.0, 75.0]
         heights = self._frozen if ph == "working" else self._bar_h
         for bx, bh in zip(CENTERS, heights):
             cv.create_line(bx, cy - bh/2, bx, cy + bh/2,
-                           fill=bar_col, width=2.5, capstyle="round")
-
-        # Scheidingslijn
-        cv.create_line(32, cy-6, 32, cy+6, fill=self.SEP, width=1)
-
-        # Taalchip (altijd)
-        lang = state.get("language", "nl")
-        lw   = max(24, len(lang) * 7 + 10)
-        self._chip_draw(39, 39+lw, cy, lang, self.CHIP_FG, self.CHIP_BG, self._cycle_lang)
-
-        # Translate-chip (alleen als postprocess != "off")
-        if has_tl:
-            tl_text = ("✦ ai" if pp == "clean" else "→ " + pp)
-            tl_x0   = 39 + lw + 5
-            self._chip_draw(tl_x0, tl_x0 + 36, cy, tl_text,
-                            self.TL_FG, self.TL_BG, self._cycle_ai)
-
-        # Gear ⚙
-        gx = W - 13
-        cv.create_text(gx, cy, text="⚙", fill=self.GEAR,
-                       font=("Segoe UI", 9), anchor="c")
-        self._chips.append((gx-11, gx+11, cy-11, cy+11, self._open_settings))
+                           fill=bar_col, width=4, capstyle="round")
 
     # ── acties ──────────────────────────────────────────────────────────────
 
