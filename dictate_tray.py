@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -1857,8 +1857,13 @@ def main():
         print("selftest OK — alle menu-teksten gerenderd; preview -> tray-preview.png")
         return
 
-    # Onboarding bij de allereerste start (op de main thread, vóór de tray-loop).
-    if not os.environ.get("DICTATE_ONBOARDED"):
+    # Onboarding bij eerste start, of als er nog niets geconfigureerd is (gebroken .env).
+    _nothing_configured = (
+        not os.environ.get("DICTATE_ENGINE") and
+        not os.environ.get("LAZYTYPE_LICENSE") and
+        not os.environ.get("GROQ_API_KEY")
+    )
+    if not os.environ.get("DICTATE_ONBOARDED") or _nothing_configured:
         try:
             run_onboarding()
         except Exception as e:
