@@ -1621,14 +1621,14 @@ class Overlay:
     BAR_REC  = "#c084fc"   # helder paars bij opnemen
     BAR_BSY  = "#7c3aed"   # middel paars bij transcriberen
 
-    W = 84    # 8 bars
+    W = 64    # 4 bars
     H = 36
 
     def __init__(self):
         self.root = None; self.thread = None; self.cv = None
         self._t = 0; self._sm = 0.0
-        self._bar_h = [1.5] * 8
-        self._frozen = [2.0, 8.0, 4.0, 11.0, 3.0, 9.0, 5.0, 7.0]
+        self._bar_h = [1.5] * 4
+        self._frozen = [4.0, 11.0, 7.0, 9.0]
         self._chips = []; self._drag = None; self._moved = False
         self._alpha = 0.25
 
@@ -1711,20 +1711,19 @@ class Overlay:
         lv = self._sm
 
         # Bar-hoogtes — elke bar eigen tempo + fase voor organisch gevoel
-        _freqs  = [0.43, 0.55, 0.38, 0.62, 0.48, 0.52, 0.41, 0.58]
-        _phases = [0.0,  0.9,  1.8,  2.7,  3.6,  4.5,  5.4,  6.3]
+        _freqs  = [0.43, 0.55, 0.38, 0.62]
+        _phases = [0.0,  0.9,  1.8,  2.7]
         if ph == "recording":
-            for i in range(8):
+            for i in range(4):
                 osc    = 0.25 + 0.75 * abs(math.sin(self._t * _freqs[i] + _phases[i]))
                 target = 2.0 + lv * 28 * osc + abs(math.sin(self._t * _freqs[i] * 0.6 + i)) * 5
                 target = min(target, H - 4)
-                # Snel omhoog, trager omlaag → punchy aanslag
                 speed  = 0.55 if target > self._bar_h[i] else 0.22
                 self._bar_h[i] += (target - self._bar_h[i]) * speed
                 self._frozen[i] = self._bar_h[i]
         elif ph != "working":
             # Zachte adem-puls bij rust zodat bars leven hebben
-            for i in range(8):
+            for i in range(4):
                 idle = 1.5 + 0.6 * abs(math.sin(self._t * 0.04 + _phases[i] * 0.4))
                 self._bar_h[i] += (idle - self._bar_h[i]) * 0.06
 
@@ -1739,13 +1738,13 @@ class Overlay:
         self._pill(2, 2, W-2, H-2, 14, self.BORDER)
         self._pill(3, 3, W-3, H-3, 13, bg)
 
-        # 8 paarse verticale bars — puntige stippen bij rust, grote balken bij spreken
+        # 4 paarse verticale bars
         bar_col = self.BAR_REC if ph == "recording" else self.BAR_BSY if ph == "working" else self.BAR_IDLE
-        CENTERS = [9.0, 19.0, 29.0, 39.0, 45.0, 55.0, 65.0, 75.0]
+        CENTERS = [14.0, 26.0, 38.0, 50.0]
         heights = self._frozen if ph == "working" else self._bar_h
         for bx, bh in zip(CENTERS, heights):
             cv.create_line(bx, cy - bh/2, bx, cy + bh/2,
-                           fill=bar_col, width=4, capstyle="round")
+                           fill=bar_col, width=5, capstyle="round")
 
     # ── acties ──────────────────────────────────────────────────────────────
 
