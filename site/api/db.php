@@ -46,9 +46,14 @@ function init_db(): void {
             INDEX idx_expires (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
-    // Migreer purchases: license_key verbreden voor HMAC-sleutels + device_id toevoegen
+    // Migreer purchases: license_key verbreden + 2 device-slots + lifetime plan
     try { $db->exec("ALTER TABLE purchases MODIFY license_key VARCHAR(400)"); } catch (\Exception $e) {}
-    try { $db->exec("ALTER TABLE purchases ADD COLUMN device_id VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE purchases MODIFY plan ENUM('personal','pro','lifetime') NOT NULL"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE purchases ADD COLUMN device_id  VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE purchases ADD COLUMN device_id_2 VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
+    // Migreer trials: 2 device-slots + reminded_at
+    try { $db->exec("ALTER TABLE trials ADD COLUMN device_2    VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE trials ADD COLUMN reminded_at DATETIME    DEFAULT NULL"); } catch (\Exception $e) {}
 
     $db->exec("
         CREATE TABLE IF NOT EXISTS downloads (

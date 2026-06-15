@@ -1271,6 +1271,20 @@ def run_onboarding():
 
     def s3():
         clear()
+        # Controleer internetverbinding vóór het tonen van het formulier
+        try:
+            import urllib.request
+            urllib.request.urlopen("https://lazytype.com/api/trial.php", timeout=5)
+        except Exception:
+            head("Geen internetverbinding",
+                 "Om de proefperiode te starten is een werkende internetverbinding nodig. "
+                 "Controleer je verbinding en start Lazytype opnieuw.")
+            bar = tk.Frame(body, bg=UI_PAPER)
+            bar.pack(side="bottom", fill="x", padx=22, pady=20)
+            _ghost_btn(tk, bar, "← Terug", s2).pack(side="left")
+            _accent_btn(tk, bar, "Afsluiten", root.destroy).pack(side="right")
+            return
+
         head("Aan de slag",
              "Vul je e-mailadres in voor 14 dagen gratis — geen creditcard nodig. "
              "Je proefsleutel wordt direct ingesteld.")

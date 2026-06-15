@@ -42,8 +42,8 @@ if ($exp && time() > $exp) {
     exit;
 }
 
-// Device binding: sleutel wordt gebonden aan het eerste apparaat dat zich meldt.
-// Daarna worden andere apparaten geweigerd.
+// Device binding: maximaal 2 apparaten per sleutel (Win + Mac).
+// Eerste melding vult slot 1, tweede vult slot 2, derde wordt geweigerd.
 $device = trim($_POST['device'] ?? '');
 if ($device) {
     require_once __DIR__ . '/db.php';
@@ -51,26 +51,38 @@ if ($device) {
         init_db();
         $db = get_db();
         if ($tier === 'trial') {
-            $stmt = $db->prepare("SELECT device FROM trials WHERE license_key = ? LIMIT 1");
+            $stmt = $db->prepare("SELECT device, device_2 FROM trials WHERE license_key = ? LIMIT 1");
             $stmt->execute([$license]);
             $row = $stmt->fetch();
             if ($row !== false) {
-                if (!$row['device']) {
-                    $db->prepare("UPDATE trials SET device = ? WHERE license_key = ?")->execute([$device, $license]);
-                } elseif ($row['device'] !== $device) {
-                    echo json_encode(['ok' => false, 'error' => 'Sleutel al in gebruik op een ander apparaat. Mail support@lazytype.com voor overdracht.', 'device_mismatch' => true]);
+                $d1 = $row['device']   ?? '';
+                $d2 = $row['device_2'] ?? '';
+                if ($device === $d1 || $device === $d2) {
+                    // bekend apparaat — OK
+                } elseif (!$d1) {
+                    $db->prepare("UPDATE trials SET device   = ? WHERE license_key = ?")->execute([$device, $license]);
+                } elseif (!$d2) {
+                    $db->prepare("UPDATE trials SET device_2 = ? WHERE license_key = ?")->execute([$device, $license]);
+                } else {
+                    echo json_encode(['ok' => false, 'error' => 'Sleutel al in gebruik op 2 apparaten. Mail support@lazytype.com voor overdracht.', 'device_mismatch' => true]);
                     exit;
                 }
             }
         } else {
-            $stmt = $db->prepare("SELECT device_id FROM purchases WHERE license_key = ? LIMIT 1");
+            $stmt = $db->prepare("SELECT device_id, device_id_2 FROM purchases WHERE license_key = ? LIMIT 1");
             $stmt->execute([$license]);
             $row = $stmt->fetch();
             if ($row !== false) {
-                if (!$row['device_id']) {
-                    $db->prepare("UPDATE purchases SET device_id = ? WHERE license_key = ?")->execute([$device, $license]);
-                } elseif ($row['device_id'] !== $device) {
-                    echo json_encode(['ok' => false, 'error' => 'Sleutel al geactiveerd op een ander apparaat. Mail support@lazytype.com voor overdracht.', 'device_mismatch' => true]);
+                $d1 = $row['device_id']   ?? '';
+                $d2 = $row['device_id_2'] ?? '';
+                if ($device === $d1 || $device === $d2) {
+                    // bekend apparaat — OK
+                } elseif (!$d1) {
+                    $db->prepare("UPDATE purchases SET device_id   = ? WHERE license_key = ?")->execute([$device, $license]);
+                } elseif (!$d2) {
+                    $db->prepare("UPDATE purchases SET device_id_2 = ? WHERE license_key = ?")->execute([$device, $license]);
+                } else {
+                    echo json_encode(['ok' => false, 'error' => 'Sleutel al geactiveerd op 2 apparaten. Mail support@lazytype.com voor overdracht.', 'device_mismatch' => true]);
                     exit;
                 }
             }

@@ -52,13 +52,13 @@ if ($exp && time() > $exp) {
     echo json_encode(['error' => 'Proef verlopen — verleng op lazytype.com']);
     exit;
 }
-if (!in_array($tier, ['trial', 'pro'], true)) {
+if (!in_array($tier, ['trial', 'pro', 'lifetime'], true)) {
     http_response_code(403);
     echo json_encode(['error' => 'Personal-sleutel vereist je eigen Groq-key in de app']);
     exit;
 }
 
-// ── Device binding check ──────────────────────────────────────────────────
+// ── Device binding check (max 2 apparaten per sleutel) ────────────────────
 $device = trim($_POST['device'] ?? '');
 if ($device) {
     require_once __DIR__ . '/db.php';
@@ -66,22 +66,32 @@ if ($device) {
         init_db();
         $db = get_db();
         if ($tier === 'trial') {
-            $stmt = $db->prepare("SELECT device FROM trials WHERE license_key = ? LIMIT 1");
+            $stmt = $db->prepare("SELECT device, device_2 FROM trials WHERE license_key = ? LIMIT 1");
             $stmt->execute([$license]);
             $row = $stmt->fetch();
-            if ($row !== false && $row['device'] && $row['device'] !== $device) {
-                http_response_code(403);
-                echo json_encode(['error' => 'Sleutel al in gebruik op een ander apparaat']);
-                exit;
+            if ($row !== false) {
+                $d1 = $row['device']   ?? '';
+                $d2 = $row['device_2'] ?? '';
+                $known = ($device === $d1 || $device === $d2 || !$d1 || !$d2);
+                if (!$known) {
+                    http_response_code(403);
+                    echo json_encode(['error' => 'Sleutel al in gebruik op 2 apparaten']);
+                    exit;
+                }
             }
         } else {
-            $stmt = $db->prepare("SELECT device_id FROM purchases WHERE license_key = ? LIMIT 1");
+            $stmt = $db->prepare("SELECT device_id, device_id_2 FROM purchases WHERE license_key = ? LIMIT 1");
             $stmt->execute([$license]);
             $row = $stmt->fetch();
-            if ($row !== false && $row['device_id'] && $row['device_id'] !== $device) {
-                http_response_code(403);
-                echo json_encode(['error' => 'Sleutel al geactiveerd op een ander apparaat']);
-                exit;
+            if ($row !== false) {
+                $d1 = $row['device_id']   ?? '';
+                $d2 = $row['device_id_2'] ?? '';
+                $known = ($device === $d1 || $device === $d2 || !$d1 || !$d2);
+                if (!$known) {
+                    http_response_code(403);
+                    echo json_encode(['error' => 'Sleutel al geactiveerd op 2 apparaten']);
+                    exit;
+                }
             }
         }
     } catch (\Exception $e) {

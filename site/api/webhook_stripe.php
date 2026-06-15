@@ -43,7 +43,7 @@ function handle_checkout(PDO $db, array $session): void {
     $session_id   = $session['id'];
     $email        = $session['customer_details']['email'] ?? $session['customer_email'] ?? '';
     $mode         = $session['mode'];   // 'payment' | 'subscription'
-    $plan         = $mode === 'subscription' ? 'pro' : 'personal';
+    $plan         = $mode === 'subscription' ? 'pro' : 'lifetime';
     $amount       = (int)($session['amount_total'] ?? 0);
     $currency     = $session['currency'] ?? 'eur';
     $customer_id  = $session['customer'] ?? null;
@@ -126,17 +126,20 @@ function stripe_sig_ok(string $payload, string $sig_header, string $secret): boo
 // ── Email ────────────────────────────────────────────────────────────────────
 
 function send_key_email(string $to, string $plan, string $key): void {
-    $label = $plan === 'pro' ? 'Pro' : 'Personal';
-    $byok  = $plan === 'personal'
-        ? "\r\nPersonal: voeg je eigen gratis Groq-key toe via tray-menu → API-key instellen.\r\n"
-        : '';
+    if ($plan === 'lifetime') {
+        $label = 'Lifetime';
+        $note  = "Je licentie is permanent geldig — geen maandelijkse kosten.";
+    } else {
+        $label = 'Pro';
+        $note  = "Je abonnement verlengt automatisch. Annuleren kan via je Stripe-portal.";
+    }
     $subj  = "Je Lazytype {$label}-sleutel";
     $body  = "Hallo,\r\n\r\n"
            . "Bedankt voor je aanschaf van Lazytype {$label}!\r\n\r\n"
            . "Je licentiesleutel:\r\n\r\n"
            . "  {$key}\r\n\r\n"
-           . "Voer hem in via: tray-menu → Abonnement-sleutel invoeren…\r\n"
-           . $byok
+           . "Voer hem in via: tray-menu → Abonnement-sleutel invoeren…\r\n\r\n"
+           . $note . "\r\n"
            . "\r\nVragen? Antwoord op deze e-mail.\r\n\r\n"
            . "Succes met dicteren!\r\n"
            . "Team Lazytype\r\n";
