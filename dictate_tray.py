@@ -118,28 +118,36 @@ UI_SUB, UI_LINE = "#6b6f7b", "#e8e6e0"
 UI_FONT, UI_MONO = ("Segoe UI", 10), ("Consolas", 11)
 
 # Keuzelijsten voor het instellingen-venster + onboarding
-HOTKEY_CHOICES = [("Rechter Ctrl", "ctrl_r"), ("Linker Ctrl", "ctrl_l"),
-                  ("Rechter Alt", "alt_r"), ("Linker Alt", "alt_l"), ("Rechter Shift", "shift_r"),
+HOTKEY_CHOICES = [("Right Ctrl", "ctrl_r"), ("Left Ctrl", "ctrl_l"),
+                  ("Right Alt", "alt_r"), ("Left Alt", "alt_l"), ("Right Shift", "shift_r"),
                   ("Ctrl + Alt", "ctrl+alt"), ("Ctrl + Shift", "ctrl+shift"),
-                  ("Ctrl + Windows", "ctrl+win"), ("Windows + Alt", "win+alt"),
-                  ("Windows + Shift", "win+shift"), ("Alt + Shift", "alt+shift"),
-                  ("F8", "f8"), ("F9", "f9"), ("F10", "f10"), ("Uit", "uit")]
+                  ("Ctrl + Win", "ctrl+win"), ("Win + Alt", "win+alt"),
+                  ("Win + Shift", "win+shift"), ("Alt + Shift", "alt+shift"),
+                  ("F8", "f8"), ("F9", "f9"), ("F10", "f10"), ("Off", "uit")]
 
 
 def _hk_display(spec):
     return next((l for l, v in HOTKEY_CHOICES if v == spec), spec)
 LANG_CHOICES = [
-    ("Engels", "en"), ("Nederlands", "nl"), ("Duits", "de"), ("Frans", "fr"),
-    ("Spaans", "es"), ("Italiaans", "it"), ("Portugees", "pt"),
-    ("Pools", "pl"), ("Russisch", "ru"), ("Oekraïens", "uk"),
-    ("Zweeds", "sv"), ("Noors", "no"), ("Deens", "da"), ("Fins", "fi"),
-    ("Turks", "tr"), ("Arabisch", "ar"), ("Japans", "ja"),
-    ("Chinees", "zh"), ("Koreaans", "ko"),
+    ("English", "en"), ("Dutch", "nl"), ("German", "de"), ("French", "fr"),
+    ("Spanish", "es"), ("Italian", "it"), ("Portuguese", "pt"),
+    ("Polish", "pl"), ("Russian", "ru"), ("Ukrainian", "uk"),
+    ("Swedish", "sv"), ("Norwegian", "no"), ("Danish", "da"), ("Finnish", "fi"),
+    ("Turkish", "tr"), ("Arabic", "ar"), ("Japanese", "ja"),
+    ("Chinese", "zh"), ("Korean", "ko"),
 ]
-SPOKEN_CHOICES = [("Automatisch", "auto"), ("Nederlands", "nl"), ("Engels", "en"),
-                  ("Duits", "de"), ("Frans", "fr"), ("Spaans", "es")]
-ENGINE_CHOICES = [("Managed (Pro)", "managed"), ("Groq (eigen key)", "groq"),
-                  ("OpenAI", "openai"), ("Lokaal", "local")]
+SPOKEN_CHOICES = [("Auto-detect", "auto"), ("Dutch", "nl"), ("English", "en"),
+                  ("German", "de"), ("French", "fr"), ("Spanish", "es")]
+ENGINE_CHOICES = [("Managed (Pro)", "managed"), ("Groq (own key)", "groq"),
+                  ("OpenAI", "openai"), ("Local", "local")]
+
+LANG_DISPLAY = {
+    "en": "English", "nl": "Dutch", "de": "German", "fr": "French",
+    "es": "Spanish", "it": "Italian", "pt": "Portuguese", "pl": "Polish",
+    "ru": "Russian", "uk": "Ukrainian", "sv": "Swedish", "no": "Norwegian",
+    "da": "Danish", "fi": "Finnish", "tr": "Turkish", "ar": "Arabic",
+    "ja": "Japanese", "zh": "Chinese", "ko": "Korean", "auto": "Auto-detect",
+}
 
 
 def render_icon(accent, size=64, shape="squircle", bar=BAR, bg=INK):
@@ -812,10 +820,10 @@ def _keypicker(tk, parent, label, initial):
     tk.Label(row, textvariable=disp_var, bg="#ffffff", fg=UI_INK, font=UI_FONT,
              anchor="w", padx=10, pady=5, relief="flat",
              highlightthickness=1, highlightbackground="#dedbd3").pack(side="left", fill="x", expand=True)
-    btn = tk.Button(row, text="Wijzig…", bg=UI_PAPER, fg=UI_ACCENT, relief="flat",
+    btn = tk.Button(row, text="Change…", bg=UI_PAPER, fg=UI_ACCENT, relief="flat",
                     font=UI_FONT, cursor="hand2", padx=8)
     btn.pack(side="left", padx=(6, 0))
-    tk.Button(row, text="Uit", bg=UI_PAPER, fg=UI_SUB, relief="flat",
+    tk.Button(row, text="Off", bg=UI_PAPER, fg=UI_SUB, relief="flat",
               font=UI_FONT, cursor="hand2", padx=4,
               command=lambda: (val.update(v="uit"), disp_var.set(_hk_display("uit")))).pack(side="left", padx=(2, 0))
 
@@ -1214,87 +1222,220 @@ def open_settings(icon_=None, item=None):
 
 
 def run_onboarding():
-    """Wizard bij eerste start (draait op de main thread, vóór de tray-loop)."""
+    """First-run wizard (runs on main thread, before the tray loop)."""
     import tkinter as tk
-    root = tk.Tk(); root.title("Welkom bij Lazytype")
-    root.configure(bg=UI_PAPER); root.attributes("-topmost", True); root.resizable(False, False)
+    root = tk.Tk()
+    root.title("Welcome to Lazytype")
+    root.configure(bg=UI_PAPER)
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-    W, H = 460, 440
+    W, H = 480, 510
     root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
-    body = tk.Frame(root, bg=UI_PAPER); body.pack(fill="both", expand=True)
+    body = tk.Frame(root, bg=UI_PAPER)
+    body.pack(fill="both", expand=True)
     sel = {"d": state["hotkey_name"], "t": state["hotkey_translate"],
-           "g": state["translate_target"], "l": state["language"]}
+           "g": state["translate_target"], "l": state["language"] or "en"}
+
+    UI_LANG_CHOICES = [
+        ("English", "en"), ("Nederlands", "nl"), ("Deutsch", "de"),
+        ("Français", "fr"), ("Español", "es"), ("Italiano", "it"),
+    ]
+    TRANSLATE_TO_CHOICES = [
+        ("Dutch", "nl"), ("English", "en"), ("German", "de"), ("French", "fr"),
+        ("Spanish", "es"), ("Italian", "it"), ("Portuguese", "pt"),
+        ("Polish", "pl"), ("Russian", "ru"), ("Turkish", "tr"),
+        ("Arabic", "ar"), ("Japanese", "ja"), ("Chinese", "zh"), ("Korean", "ko"),
+    ]
 
     def clear():
         for w in body.winfo_children():
             w.destroy()
 
+    def logo_row(step_n, total=5):
+        hdr = tk.Frame(body, bg=UI_PAPER)
+        hdr.pack(fill="x", padx=24, pady=(18, 0))
+        c = tk.Canvas(hdr, width=30, height=30, bg=UI_PAPER, highlightthickness=0)
+        c.pack(side="left")
+        c.create_rectangle(0, 0, 30, 30, fill=UI_INK, outline="")
+        for corner in [(0,0,6,6),(24,0,30,6),(0,24,6,30),(24,24,30,30)]:
+            c.create_rectangle(*corner, fill=UI_PAPER, outline="")
+        c.create_rectangle(6,  12, 9,  20, fill="#f5f6fa", outline="")
+        c.create_rectangle(11, 8,  14, 22, fill="#f5f6fa", outline="")
+        c.create_rectangle(16, 14, 19, 19, fill="#f5f6fa", outline="")
+        c.create_rectangle(21, 6,  23, 24, fill=UI_ACCENT, outline="")
+        tk.Label(hdr, text="Lazytype", bg=UI_PAPER, fg=UI_INK,
+                 font=("Segoe UI", 13, "bold")).pack(side="left", padx=(8, 0))
+        tk.Label(hdr, text=f"Step {step_n} of {total}", bg=UI_PAPER, fg=UI_ACCENT,
+                 font=("Segoe UI", 9, "bold")).pack(side="right")
+
     def head(t, sub):
-        tk.Label(body, text=t, bg=UI_PAPER, fg=UI_INK, font=("Segoe UI", 17, "bold"),
-                 wraplength=W - 48, justify="left", anchor="w").pack(fill="x", padx=24, pady=(28, 6))
+        tk.Label(body, text=t, bg=UI_PAPER, fg=UI_INK, font=("Segoe UI", 15, "bold"),
+                 wraplength=W - 48, justify="left", anchor="w").pack(fill="x", padx=24, pady=(12, 4))
         tk.Label(body, text=sub, bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 10),
                  wraplength=W - 48, justify="left", anchor="w").pack(fill="x", padx=24)
 
-    def nav(back, primary_text, primary_cmd):
-        bar = tk.Frame(body, bg=UI_PAPER); bar.pack(side="bottom", fill="x", padx=22, pady=20)
+    def nav(back_cmd, primary_text, primary_cmd, skip_cmd=None):
+        bar = tk.Frame(body, bg=UI_PAPER)
+        bar.pack(side="bottom", fill="x", padx=22, pady=16)
         _accent_btn(tk, bar, primary_text, primary_cmd).pack(side="right")
-        if back:
-            _ghost_btn(tk, bar, "← Terug", back).pack(side="left")
+        if skip_cmd:
+            _ghost_btn(tk, bar, "Skip", skip_cmd).pack(side="right", padx=(0, 6))
+        if back_cmd:
+            _ghost_btn(tk, bar, "← Back", back_cmd).pack(side="left")
 
-    def s0():
-        clear(); head("Welkom bij Lazytype",
-                      "Houd een toets ingedrukt, spreek, en je woorden verschijnen — in elke app. "
-                      "Even een paar dingen instellen, dan kun je los.")
-        nav(None, "Beginnen →", s1)
-
-    def s1():
-        clear(); head("Kies je dicteer-toets",
-                      "Houd deze toets ingedrukt terwijl je spreekt; laat los om te stoppen. "
-                      "Klik 'Wijzig…' en druk dan de gewenste toets(combo).")
-        g = _keypicker(tk, body, "Dicteren", sel["d"])
-        nav(s0, "Volgende →", lambda: (sel.update(d=g()), s_lang()))
-
+    # ── Step 1: Language ──────────────────────────────────────────────────
     def s_lang():
-        clear(); head("Welke taal spreek je?",
-                      "Lazytype herkent je stem beter als het weet in welke taal je dicteert. "
-                      "Je kunt dit later aanpassen via Instellingen.")
-        g = _dropdown(tk, body, "Spreektaal", SPOKEN_CHOICES, sel["l"])
-        nav(s1, "Volgende →", lambda: (sel.update(l=g()), s2()))
-
-    def s2():
-        clear(); head("Vertaal-toets",
-                      "Een aparte toets die je dictaat meteen vertaalt. Bijvoorbeeld: spreek Nederlands, "
-                      "krijg Engels. Of spreek Engels, krijg Duits.")
-        g1 = _keypicker(tk, body, "Vertaal-toets", sel["t"])
-        g2 = _dropdown(tk, body, "Vertaal naar", LANG_CHOICES, sel["g"])
-        nav(s_lang, "Volgende →", lambda: (sel.update(t=g1(), g=g2()), s3()))
-
-    def s3():
         clear()
-        # Controleer internetverbinding vóór het tonen van het formulier
+        logo_row(1)
+        head("Choose your language",
+             "This sets both the app interface and the language you'll speak when dictating.")
+        grid = tk.Frame(body, bg=UI_PAPER)
+        grid.pack(fill="x", padx=24, pady=(14, 0))
+        grid.columnconfigure(0, weight=1)
+        grid.columnconfigure(1, weight=1)
+        btns = {}
+
+        def select_lang(code):
+            sel["l"] = code
+            for c2, b in btns.items():
+                b.config(bg=UI_ACCENT if c2 == code else "#ffffff",
+                         fg="#ffffff" if c2 == code else UI_INK,
+                         highlightbackground=UI_ACCENT if c2 == code else "#dedbd3")
+
+        for i, (name, code) in enumerate(UI_LANG_CHOICES):
+            b = tk.Button(grid, text=name, font=("Segoe UI", 10),
+                          bg="#ffffff", fg=UI_INK, relief="flat", bd=0,
+                          cursor="hand2", pady=8, highlightthickness=1,
+                          highlightbackground="#dedbd3",
+                          command=lambda c=code: select_lang(c))
+            b.grid(row=i // 2, column=i % 2, padx=4, pady=4, sticky="ew")
+            btns[code] = b
+
+        cur = sel["l"] if sel["l"] in dict(UI_LANG_CHOICES).values() else "en"
+        select_lang(cur)
+        nav(None, "Continue →", s_welcome)
+
+    # ── Step 2: Welcome ───────────────────────────────────────────────────
+    def s_welcome():
+        clear()
+        logo_row(2)
+        head("Welcome to Lazytype",
+             "Hold a key, speak, and your words appear — in any app.")
+
+        lang_name = LANG_DISPLAY.get(sel["l"], "your language")
+        get_name  = LANG_DISPLAY.get(sel["g"], "another language")
+
+        feats = [
+            ("♪", "Press & speak  (hold key while speaking)",
+             "Release to stop. Text appears instantly in your active app — "
+             "Word, Slack, Gmail, anywhere."),
+            ("⇄", "Translate as you speak",
+             f"Speak {lang_name} and instantly get {get_name} back — AI corrects grammar "
+             f"and phrasing so the result reads naturally, not like a machine translation.\n"
+             f"You'll choose the target language and set the key in step 4."),
+            ("⊞", "Works everywhere",
+             "Any text field on your computer — browser, editor, chat, email."),
+        ]
+
+        for icon_ch, title, desc in feats:
+            row = tk.Frame(body, bg=UI_PAPER)
+            row.pack(fill="x", padx=24, pady=(10, 0))
+            icon_f = tk.Frame(row, bg="#eeedfe", width=34, height=34)
+            icon_f.pack(side="left", anchor="n")
+            icon_f.pack_propagate(False)
+            tk.Label(icon_f, text=icon_ch, bg="#eeedfe", fg=UI_ACCENT,
+                     font=("Segoe UI", 13)).pack(expand=True)
+            txt_f = tk.Frame(row, bg=UI_PAPER)
+            txt_f.pack(side="left", fill="x", expand=True, padx=(10, 0))
+            tk.Label(txt_f, text=title, bg=UI_PAPER, fg=UI_INK,
+                     font=("Segoe UI", 10, "bold"), anchor="w",
+                     justify="left").pack(fill="x")
+            tk.Label(txt_f, text=desc, bg=UI_PAPER, fg=UI_SUB,
+                     font=("Segoe UI", 9), anchor="w", justify="left",
+                     wraplength=W - 110).pack(fill="x")
+
+        nav(s_lang, "Next →", s_dictkey)
+
+    # ── Step 3: Dictation key ─────────────────────────────────────────────
+    def s_dictkey():
+        clear()
+        logo_row(3)
+        head("Choose your dictation key",
+             "Hold this key while you speak, then release to stop. "
+             "It won't interfere with normal keyboard use.")
+        g = _keypicker(tk, body, "Dictation key", sel["d"])
+        tk.Label(body, text="Popular: Right Ctrl · Right Alt · F8 · F9 · Ctrl + Alt",
+                 bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9),
+                 anchor="w").pack(fill="x", padx=24, pady=(4, 0))
+        nav(s_welcome, "Next →", lambda: (sel.update(d=g()), s_transkey()))
+
+    # ── Step 4: Translation key + target language ─────────────────────────
+    def s_transkey():
+        clear()
+        logo_row(4)
+        head("Translation key",
+             "Hold this key to dictate and translate at the same time. "
+             "You can skip this and set it up later in Settings.")
+        lang_name = LANG_DISPLAY.get(sel["l"], sel["l"])
+        info = tk.Frame(body, bg="#f0efe9")
+        info.pack(fill="x", padx=24, pady=(10, 0))
+        tk.Label(info, text=f"Speak: {lang_name}  ·  set in step 1",
+                 bg="#f0efe9", fg=UI_SUB, font=("Segoe UI", 9),
+                 anchor="w", padx=10, pady=5).pack(fill="x")
+        g2 = _dropdown(tk, body, "Translate to", TRANSLATE_TO_CHOICES, sel["g"])
+        g1 = _keypicker(tk, body, "Translation key", sel["t"])
+        tk.Label(body, text="Popular: Right Alt · F9 · Ctrl + Alt",
+                 bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9),
+                 anchor="w").pack(fill="x", padx=24, pady=(4, 0))
+        save_and_next = lambda: (sel.update(t=g1(), g=g2()), s_email())
+        nav(s_dictkey, "Next →", save_and_next, skip_cmd=save_and_next)
+
+    # ── Step 5: Email + summary + trial ──────────────────────────────────
+    def s_email():
+        clear()
+        logo_row(5)
         try:
             import urllib.request
             urllib.request.urlopen("https://lazytype.com/api/trial.php", timeout=5)
         except Exception:
-            head("Geen internetverbinding",
-                 "Om de proefperiode te starten is een werkende internetverbinding nodig. "
-                 "Controleer je verbinding en start Lazytype opnieuw.")
+            head("No internet connection",
+                 "An internet connection is required to start the free trial. "
+                 "Check your connection and restart Lazytype.")
             bar = tk.Frame(body, bg=UI_PAPER)
             bar.pack(side="bottom", fill="x", padx=22, pady=20)
-            _ghost_btn(tk, bar, "← Terug", s2).pack(side="left")
-            _accent_btn(tk, bar, "Afsluiten", root.destroy).pack(side="right")
+            _ghost_btn(tk, bar, "← Back", s_transkey).pack(side="left")
+            _accent_btn(tk, bar, "Quit", root.destroy).pack(side="right")
             return
 
-        head("Aan de slag",
-             "Vul je e-mailadres in voor 14 dagen gratis — geen creditcard nodig. "
-             "Je proefsleutel wordt direct ingesteld.")
+        head("You're all set — let's go",
+             "Start your 14-day free trial. No credit card needed.")
 
-        email_frame = tk.Frame(body, bg=UI_PAPER)
-        email_frame.pack(fill="x", padx=24, pady=(14, 0))
-        tk.Label(email_frame, text="E-mailadres", bg=UI_PAPER, fg=UI_SUB,
+        lang_name = LANG_DISPLAY.get(sel["l"], sel["l"])
+        get_name  = LANG_DISPLAY.get(sel["g"], sel["g"])
+        hk_name   = _hk_display(sel["d"])
+        tr_name   = _hk_display(sel["t"])
+
+        sum_f = tk.Frame(body, bg="#f0efe9")
+        sum_f.pack(fill="x", padx=24, pady=(10, 0))
+        tk.Label(sum_f,
+                 text=f"Dictation key: {hk_name}  —  hold to speak in {lang_name}",
+                 bg="#f0efe9", fg=UI_INK, font=("Segoe UI", 9),
+                 anchor="w", padx=10, pady=4).pack(fill="x")
+        tk.Frame(sum_f, bg="#dedbd3", height=1).pack(fill="x", padx=10)
+        tk.Label(sum_f,
+                 text=f"Translation key: {tr_name}  —  {lang_name} → {get_name}, AI-corrected",
+                 bg="#f0efe9", fg=UI_INK, font=("Segoe UI", 9),
+                 anchor="w", padx=10, pady=4).pack(fill="x")
+
+        tk.Frame(body, bg="#dedbd3", height=1).pack(fill="x", padx=24, pady=(12, 6))
+
+        ef = tk.Frame(body, bg=UI_PAPER)
+        ef.pack(fill="x", padx=24)
+        tk.Label(ef, text="Email address", bg=UI_PAPER, fg=UI_SUB,
                  font=UI_FONT, anchor="w").pack(fill="x")
         email_var = tk.StringVar()
-        email_entry = tk.Entry(email_frame, textvariable=email_var, font=UI_FONT,
+        email_entry = tk.Entry(ef, textvariable=email_var, font=UI_FONT,
                                relief="flat", bg="#ffffff", fg=UI_INK,
                                insertbackground=UI_INK, highlightthickness=1,
                                highlightbackground="#dedbd3", highlightcolor=UI_ACCENT)
@@ -1303,28 +1444,27 @@ def run_onboarding():
 
         status_var = tk.StringVar()
         tk.Label(body, textvariable=status_var, bg=UI_PAPER, fg=UI_SUB,
-                 font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=24, pady=(6, 0))
+                 font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=24, pady=(4, 0))
 
-        tk.Frame(body, bg="#dedbd3", height=1).pack(fill="x", padx=24, pady=(14, 6))
         alt = tk.Frame(body, bg=UI_PAPER)
-        alt.pack(fill="x", padx=24)
-        tk.Label(alt, text="Heb je al een licentie- of Pro-sleutel?",
+        alt.pack(fill="x", padx=24, pady=(4, 0))
+        tk.Label(alt, text="Already have a license or Pro key?",
                  bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9)).pack(side="left")
-        _ghost_btn(tk, alt, "Invoeren…",
+        _ghost_btn(tk, alt, "Enter it here…",
                    lambda: set_license_action(None, None)).pack(side="left", padx=(6, 0))
 
         def finish():
             global _keypicking
             _keypicking = False
             pressed.clear()
-            state["hotkey_name"] = sel["d"]
+            state["hotkey_name"]      = sel["d"]
             state["hotkey_translate"] = sel["t"]
             state["translate_target"] = sel["g"]
-            state["language"] = sel["l"]
-            for k, envk in (("hotkey_name", "DICTATE_HOTKEY"),
+            state["language"]         = sel["l"]
+            for k, envk in (("hotkey_name",     "DICTATE_HOTKEY"),
                             ("hotkey_translate", "DICTATE_TRANSLATE_HOTKEY"),
                             ("translate_target", "DICTATE_TRANSLATE_TARGET"),
-                            ("language", "DICTATE_LANGUAGE")):
+                            ("language",         "DICTATE_LANGUAGE")):
                 dictate.save_env_value(envk, state[k])
             dictate.save_env_value("DICTATE_ONBOARDED", "1")
             rebuild_hotkeys()
@@ -1333,9 +1473,9 @@ def run_onboarding():
         def start_trial():
             email = email_var.get().strip()
             if not email or "@" not in email:
-                status_var.set("Vul een geldig e-mailadres in.")
+                status_var.set("Please enter a valid email address.")
                 return
-            status_var.set("Proefsleutel aanvragen…")
+            status_var.set("Requesting your trial key…")
             root.update()
             try:
                 key = _request_trial_key(email)
@@ -1343,16 +1483,16 @@ def run_onboarding():
                 os.environ["LAZYTYPE_LICENSE"] = key
                 state["engine"] = "managed"
                 dictate.save_env_value("DICTATE_ENGINE", "managed")
-                status_var.set("✓ Gelukt! 14 dagen gratis dicteren.")
-                root.after(1000, finish)
+                status_var.set("Done! 14 days free. Check your email for the key.")
+                root.after(1200, finish)
             except Exception as e:
-                status_var.set(f"Fout: {e}")
+                status_var.set(f"Error: {e}")
 
         bar = tk.Frame(body, bg=UI_PAPER)
-        bar.pack(side="bottom", fill="x", padx=22, pady=20)
-        _accent_btn(tk, bar, "Start proef →", start_trial).pack(side="right")
-        _ghost_btn(tk, bar, "← Terug", s2).pack(side="left")
-        _ghost_btn(tk, bar, "Overslaan", finish).pack(side="left", padx=(12, 0))
+        bar.pack(side="bottom", fill="x", padx=22, pady=14)
+        _accent_btn(tk, bar, "Start free trial →", start_trial).pack(side="right")
+        _ghost_btn(tk, bar, "← Back", s_transkey).pack(side="left")
+        _ghost_btn(tk, bar, "Skip for now", finish).pack(side="left", padx=(12, 0))
 
     def skip():
         global _keypicking
@@ -1362,7 +1502,7 @@ def run_onboarding():
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", skip)
-    s0()
+    s_lang()
     root.mainloop()
 
 
@@ -1466,13 +1606,37 @@ def build_menu():
     )
 
 
-# ── Klein drijvend overlay-pilletje: live waveform + status + snel aanpassen ──
+# ── Klein drijvend overlay-pilletje ─────────────────────────────────────────
+# Layout: [4 bars] | [nl] [→en alleen als actief] [⚙]
+# Idle: bars vlak op 3px · Opnemen: bars animeren · Transcriberen: bars bevriezen (amber)
 class Overlay:
-    PILL = "#16171d"; SUB = "#a6a9b4"; CHIP = "#272833"; WAVE = "#8f7dff"
+    # Pill achtergrond per staat
+    PILL      = "#0d0e13"
+    PILL_REC  = "#1d0e0f"   # subtiele rode tint
+    PILL_BSY  = "#181309"   # subtiele amber tint
+    BORDER    = "#1c1d26"
+    BDR_REC   = "#3a1a1c"
+    BDR_BSY   = "#2e2710"
+    # Bars
+    BAR_IDLE  = "#252637"   # heel dim bij rust
+    BAR_REC   = "#c4baff"   # helder wit-violet bij opnemen
+    BAR_BSY   = "#7a5c14"   # amber bij transcriberen
+    # Chips
+    CHIP_BG   = "#17182200"; CHIP_FG = "#50526a"   # lang-chip
+    TL_BG     = "#13122500"; TL_FG   = "#6250c8"   # translate-chip (violet)
+    SEP       = "#1c1d28"
+    GEAR      = "#2c2d3e"
+
+    W_BASE = 138   # breedte zonder translate-chip
+    W_TL   = 176   # breedte met translate-chip
+    H      = 34
 
     def __init__(self):
         self.root = None; self.thread = None; self.cv = None
-        self._t = 0; self._sm = 0.0; self._chips = []; self._drag = None; self._moved = False; self._imgs = {}
+        self._t = 0; self._sm = 0.0
+        self._bar_h = [3.0, 3.0, 3.0, 3.0]   # huidige bar-hoogten (smooth)
+        self._frozen = [5.0, 9.0, 6.0, 8.0]   # bevroren bij transcriberen
+        self._chips = []; self._drag = None; self._moved = False
 
     def start(self):
         if self.thread and self.thread.is_alive():
@@ -1492,114 +1656,159 @@ class Overlay:
 
     def _run(self):
         import tkinter as tk
-        from PIL import ImageTk
         root = tk.Tk()
         root.overrideredirect(True)
         root.attributes("-topmost", True)
         transp = "#000001"
         try:
-            root.configure(bg=transp); root.attributes("-transparentcolor", transp)
+            root.configure(bg=transp)
+            root.attributes("-transparentcolor", transp)
         except Exception:
             transp = self.PILL; root.configure(bg=transp)
-        try: root.attributes("-alpha", 0.97)
+        try: root.attributes("-alpha", 0.96)
         except Exception: pass
-        self.W, self.H = 360, 54
+        self.W = self.W_BASE
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{self.W}x{self.H}+{(sw - self.W) // 2}+{sh - self.H - 74}")
-        self.cv = tk.Canvas(root, width=self.W, height=self.H, highlightthickness=0, bg=transp)
+        root.geometry(f"{self.W}x{self.H}+{(sw - self.W) // 2}+{sh - self.H - 60}")
+        self.cv = tk.Canvas(root, width=self.W, height=self.H,
+                            highlightthickness=0, bg=transp)
         self.cv.pack()
-        for k in ("idle", "recording", "working", "disabled"):
-            self._imgs[k] = ImageTk.PhotoImage(make_icon(k, size=34, shape="squircle"))
-        self.cv.bind("<ButtonPress-1>", self._press)
-        self.cv.bind("<B1-Motion>", self._motion)
+        self.cv.bind("<ButtonPress-1>",   self._press)
+        self.cv.bind("<B1-Motion>",       self._motion)
         self.cv.bind("<ButtonRelease-1>", self._release)
         self.root = root
         self._tick()
         root.mainloop()
 
     def _tick(self):
-        if not self.root:
-            return
+        if not self.root: return
         try: self._draw()
         except Exception: pass
         self._t += 1
-        try: self.root.after(45, self._tick)
+        try: self.root.after(40, self._tick)
         except Exception: pass
 
-    def _round(self, x0, y0, x1, y1, r, fill):
+    # ── tekenhelpers ────────────────────────────────────────────────────────
+
+    def _pill(self, x0, y0, x1, y1, r, fill):
         self.cv.create_polygon(
-            [x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r, x1, y1 - r, x1, y1,
-             x1 - r, y1, x0 + r, y1, x0, y1, x0, y1 - r, x0, y0 + r, x0, y0],
+            [x0+r, y0, x1-r, y0, x1, y0, x1, y0+r,
+             x1, y1-r, x1, y1, x1-r, y1, x0+r, y1,
+             x0, y1, x0, y1-r, x0, y0+r, x0, y0],
             smooth=True, fill=fill, outline=fill)
 
-    def _chip(self, cx, cy, text, cb):
-        w = max(34, len(text) * 7 + 16)
-        x0, x1, y0, y1 = cx - w // 2, cx + w // 2, cy - 10, cy + 10
-        self._round(x0, y0, x1, y1, 10, self.CHIP)
-        self.cv.create_text(cx, cy, text=text, fill=self.SUB, font=("Segoe UI", 8), anchor="c")
-        self._chips.append((x0, x1, y0, y1, cb))
+    def _chip_draw(self, x0, x1, cy, text, fg, bg, cb):
+        r = 5
+        self._pill(x0, cy-8, x1, cy+8, r, bg)
+        self.cv.create_text((x0+x1)//2, cy, text=text, fill=fg,
+                            font=("Segoe UI", 8, "bold"), anchor="c")
+        self._chips.append((x0, x1, cy-9, cy+9, cb))
 
-    def _waveform(self, x0, x1, cy):
-        self._sm += (recorder.last_level - self._sm) * 0.4
-        lv = self._sm
-        n = 12; gap = (x1 - x0) / n
-        for i in range(n):
-            x = x0 + gap * (i + 0.5)
-            f = 0.30 + 0.70 * abs(math.sin(self._t * 0.45 + i * 0.6))
-            h = 3 + lv * 60 * f
-            self.cv.create_line(x, cy - h / 2, x, cy + h / 2, fill=self.WAVE, width=3, capstyle="round")
+    # ── hoofd-renderfunctie ──────────────────────────────────────────────────
 
     def _draw(self):
         cv = self.cv; cv.delete("all")
-        W, H = self.W, self.H
-        ph = "recording" if state["phase"] == "arming" else current_phase()
-        if ph not in self._imgs:
-            ph = "idle"
-        self._round(5, 5, W - 5, H - 5, 18, self.PILL)
-        cv.create_image(30, H // 2, image=self._imgs[ph])
-        mx0, mx1 = 52, W - 132
-        if ph == "recording":
-            self._waveform(mx0, mx1, H // 2)
-        else:
-            label = ("Transcriberen" + "." * (1 + (self._t // 5) % 3)) if ph == "working" \
-                else "Gepauzeerd" if ph == "disabled" else "Klaar — houd je toets in"
-            cv.create_text((mx0 + mx1) // 2, H // 2, text=label, fill=self.SUB, font=("Segoe UI", 10), anchor="c")
         self._chips = []
-        rx = W - 64
-        self._chip(rx, H // 2 - 12, "taal: " + state["language"], self._cycle_lang)
-        ai = {"off": "AI: uit", "clean": "AI: schoon"}.get(state["postprocess"], "AI → " + state["postprocess"])
-        self._chip(rx, H // 2 + 12, ai, self._cycle_ai)
+        ph  = "recording" if state["phase"] == "arming" else current_phase()
+        pp  = state.get("postprocess", "off")
+        has_tl = (pp != "off")
+
+        # Pas venstergrootte aan als translate-chip aan/uit gaat
+        target_W = self.W_TL if has_tl else self.W_BASE
+        if target_W != self.W and self.root:
+            old_cx = self.root.winfo_x() + self.W // 2
+            self.W  = target_W
+            new_x   = max(0, old_cx - target_W // 2)
+            self.root.geometry(f"{target_W}x{self.H}+{new_x}+{self.root.winfo_y()}")
+            self.cv.config(width=target_W)
+        W, H = self.W, self.H
+        cy = H // 2
+
+        # Audio-niveau smoothen
+        self._sm += (recorder.last_level - self._sm) * 0.35
+        lv = self._sm
+
+        # Bar-hoogte bijwerken
+        if ph == "recording":
+            for i in range(4):
+                f = 0.3 + 0.7 * abs(math.sin(self._t * 0.48 + i * 0.9))
+                target = 3 + lv * 16 * f + abs(math.sin(self._t * 0.22 + i * 1.4)) * 2
+                self._bar_h[i] += (min(target, 14.0) - self._bar_h[i]) * 0.35
+                self._frozen[i]  = self._bar_h[i]        # sla op voor freeze
+        elif ph != "working":                              # idle / disabled
+            for i in range(4):
+                self._bar_h[i] += (3.0 - self._bar_h[i]) * 0.18   # ease naar rust
+
+        # Pill achtergrond + rand
+        bg     = self.PILL_REC if ph == "recording" else self.PILL_BSY if ph == "working" else self.PILL
+        border = self.BDR_REC  if ph == "recording" else self.BDR_BSY  if ph == "working" else self.BORDER
+        self._pill(2, 2, W-2, H-2, 14, border)
+        self._pill(3, 3, W-3, H-3, 13, bg)
+
+        # 4 bars
+        bar_col = self.BAR_REC if ph == "recording" else self.BAR_BSY if ph == "working" else self.BAR_IDLE
+        CENTERS = [10.5, 15.0, 19.5, 24.0]   # x-posities, 2.5px breed, 2px gap
+        heights = self._frozen if ph == "working" else self._bar_h
+        for bx, bh in zip(CENTERS, heights):
+            cv.create_line(bx, cy - bh/2, bx, cy + bh/2,
+                           fill=bar_col, width=2.5, capstyle="round")
+
+        # Scheidingslijn
+        cv.create_line(32, cy-6, 32, cy+6, fill=self.SEP, width=1)
+
+        # Taalchip (altijd)
+        lang = state.get("language", "nl")
+        lw   = max(24, len(lang) * 7 + 10)
+        self._chip_draw(39, 39+lw, cy, lang, self.CHIP_FG, self.CHIP_BG, self._cycle_lang)
+
+        # Translate-chip (alleen als postprocess != "off")
+        if has_tl:
+            tl_text = ("✦ ai" if pp == "clean" else "→ " + pp)
+            tl_x0   = 39 + lw + 5
+            self._chip_draw(tl_x0, tl_x0 + 36, cy, tl_text,
+                            self.TL_FG, self.TL_BG, self._cycle_ai)
+
+        # Gear ⚙
+        gx = W - 13
+        cv.create_text(gx, cy, text="⚙", fill=self.GEAR,
+                       font=("Segoe UI", 9), anchor="c")
+        self._chips.append((gx-11, gx+11, cy-11, cy+11, self._open_settings))
+
+    # ── acties ──────────────────────────────────────────────────────────────
 
     def _cycle_lang(self):
         order = ["nl", "en", "de", "fr", "es", "auto"]
         i = order.index(state["language"]) if state["language"] in order else -1
         state["language"] = order[(i + 1) % len(order)]
+        dictate.save_env_value("DICTATE_LANGUAGE", state["language"])
 
     def _cycle_ai(self):
-        order = ["off", "clean", "en", "nl", "de"]
+        order = ["off", "clean", "en", "nl", "de", "fr"]
         i = order.index(state["postprocess"]) if state["postprocess"] in order else -1
         state["postprocess"] = order[(i + 1) % len(order)]
+        dictate.save_env_value("DICTATE_POSTPROCESS", state["postprocess"])
+
+    def _open_settings(self):
+        threading.Thread(target=_run_settings_window, daemon=True).start()
+
+    # ── drag ────────────────────────────────────────────────────────────────
 
     def _press(self, e):
-        self._drag = (e.x_root, e.y_root, self.root.winfo_x(), self.root.winfo_y()); self._moved = False
+        self._drag = (e.x_root, e.y_root, self.root.winfo_x(), self.root.winfo_y())
+        self._moved = False
 
     def _motion(self, e):
-        if not self._drag:
-            return
+        if not self._drag: return
         dx, dy = e.x_root - self._drag[0], e.y_root - self._drag[1]
-        if abs(dx) + abs(dy) > 4:
-            self._moved = True
-        self.root.geometry(f"+{self._drag[2] + dx}+{self._drag[3] + dy}")
+        if abs(dx) + abs(dy) > 4: self._moved = True
+        self.root.geometry(f"+{self._drag[2]+dx}+{self._drag[3]+dy}")
 
     def _release(self, e):
         moved, self._drag = self._moved, None
-        if moved:
-            return
+        if moved: return
         for x0, x1, y0, y1, cb in self._chips:
             if x0 <= e.x <= x1 and y0 <= e.y <= y1:
                 cb(); return
-        if e.x <= 50:                       # klik op het logo = pauze aan/uit
-            state["enabled"] = not state["enabled"]
 
 
 overlay_ui = Overlay()
