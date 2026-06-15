@@ -23,6 +23,12 @@ try {
         case 'customer.subscription.deleted':
             handle_sub_cancelled($db, $event['data']['object']);
             break;
+        case 'customer.subscription.updated':
+            handle_sub_updated($db, $event['data']['object']);
+            break;
+        case 'invoice.payment_failed':
+            handle_payment_failed($db, $event['data']['object']);
+            break;
         case 'charge.refunded':
             handle_refund($db, $event['data']['object']);
             break;
@@ -40,14 +46,16 @@ try {
 // ── Handlers ────────────────────────────────────────────────────────────────
 
 function handle_checkout(PDO $db, array $session): void {
-    $session_id   = $session['id'];
+    $session_id   = $session['id'] ?? '';
+    if (!$session_id) return;
     $email        = $session['customer_details']['email'] ?? $session['customer_email'] ?? '';
-    $mode         = $session['mode'];   // 'payment' | 'subscription'
+    $mode         = $session['mode'] ?? 'payment';   // 'payment' | 'subscription'
     $plan         = $mode === 'subscription' ? 'pro' : 'lifetime';
     $amount       = (int)($session['amount_total'] ?? 0);
     $currency     = $session['currency'] ?? 'eur';
     $customer_id  = $session['customer'] ?? null;
     $sub_id       = $session['subscription'] ?? null;
+    $pi_id        = $session['payment_intent'] ?? null;   // voor refund-matching
 
     if (!$email) return;
 
@@ -61,10 +69,10 @@ function handle_checkout(PDO $db, array $session): void {
 
     $db->prepare('INSERT INTO purchases
         (stripe_session_id, stripe_customer_id, stripe_subscription_id,
-         email, plan, amount_cents, currency, license_key)
-        VALUES (?,?,?,?,?,?,?,?)')
+         email, plan, amount_cents, currency, license_key, stripe_payment_intent)
+        VALUES (?,?,?,?,?,?,?,?,?)')
        ->execute([$session_id, $customer_id, $sub_id,
-                  $email, $plan, $amount, $currency, $key]);
+                  $email, $plan, $amount, $currency, $key, $pi_id]);
 
     send_key_email($email, $plan, $key);
 }
@@ -75,14 +83,41 @@ function handle_sub_cancelled(PDO $db, array $sub): void {
        ->execute([$sub['id']]);
 }
 
+function handle_sub_updated(PDO $db, array $sub): void {
+    $sub_id = $sub['id'] ?? '';
+    $status = $sub['status'] ?? '';
+    if (!$sub_id) return;
+    if ($status === 'active') {
+        $db->prepare("UPDATE purchases SET status='active' WHERE stripe_subscription_id=?")
+           ->execute([$sub_id]);
+    } elseif (in_array($status, ['past_due', 'unpaid', 'paused'], true)) {
+        $db->prepare("UPDATE purchases SET status='suspended' WHERE stripe_subscription_id=?")
+           ->execute([$sub_id]);
+    }
+}
+
+function handle_payment_failed(PDO $db, array $invoice): void {
+    $sub_id = $invoice['subscription'] ?? '';
+    if (!$sub_id) return;
+    $db->prepare("UPDATE purchases SET status='suspended' WHERE stripe_subscription_id=? AND status='active'")
+       ->execute([$sub_id]);
+}
+
 function handle_refund(PDO $db, array $charge): void {
-    $pi = $charge['payment_intent'] ?? null;
-    if (!$pi) return;
-    $db->prepare("UPDATE purchases SET status='refunded'
-                  WHERE stripe_session_id IN (
-                      SELECT id FROM (SELECT id FROM purchases WHERE stripe_session_id LIKE ?) t
-                  ) OR stripe_customer_id=?")
-       ->execute(["%$pi%", $charge['customer'] ?? '']);
+    // Match exact op de opgeslagen payment-intent (betrouwbaar). Pas als die
+    // ontbreekt, val terug op de customer-id — maar nooit op een lege waarde,
+    // anders zouden álle rijen met lege customer ge-refund worden.
+    $pi   = $charge['payment_intent'] ?? '';
+    $cust = $charge['customer'] ?? '';
+    if ($pi) {
+        $n = $db->prepare("UPDATE purchases SET status='refunded' WHERE stripe_payment_intent = ?");
+        $n->execute([$pi]);
+        if ($n->rowCount() > 0) return;
+    }
+    if ($cust) {
+        $db->prepare("UPDATE purchases SET status='refunded' WHERE stripe_customer_id = ?")
+           ->execute([$cust]);
+    }
 }
 
 // ── Sleutelgeneratie (HMAC-ondertekend, LZT.… formaat) ──────────────────────

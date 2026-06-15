@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.0.9"
+APP_VERSION = "1.1.5"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -61,6 +61,44 @@ def _check_update():
     except Exception:
         pass
 
+
+def _cleanup_stale_mei():
+    """Ruim verweesde PyInstaller _MEI-mappen op die na een update achterblijven.
+
+    Veilig: slaat de HUIDIGE map (sys._MEIPASS), recente mappen (<10 min, mogelijk
+    een instantie die net (af)start) en nog-vergrendelde mappen over. Een map is
+    'in gebruik' als zijn python*.dll niet exclusief te openen is — dan overslaan.
+    Dit vervangt de gevaarlijke rmdir-sweep die tijdens het afsluiten een nog
+    gebruikte map verwijderde ('Failed to load Python DLL')."""
+    if not getattr(sys, "frozen", False) or not IS_WIN:
+        return
+    try:
+        import tempfile, shutil
+        tmp = Path(tempfile.gettempdir())
+        try:
+            current = str(Path(sys._MEIPASS).resolve())
+        except Exception:
+            current = ""
+        now = time.time()
+        for d in tmp.glob("_MEI*"):
+            try:
+                if not d.is_dir() or str(d.resolve()) == current:
+                    continue
+                if now - d.stat().st_mtime < 600:          # recent → mogelijk actief
+                    continue
+                dlls = list(d.glob("python*.dll"))
+                if dlls:
+                    try:
+                        with open(dlls[0], "r+b"):          # exclusief openen
+                            pass                            # lukt → niet geladen → verweesd
+                    except OSError:
+                        continue                            # vergrendeld → in gebruik → overslaan
+                shutil.rmtree(d, ignore_errors=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
 # Sneltoetsen die óók een modifier zijn (ctrl/alt/shift). Hierbij gebruiken we een
 # "arming"-mechanisme: kort tikken of een snelkoppeling (bv. Ctrl+C) start géén dictaat.
 MODIFIER_KEYS = {
@@ -74,6 +112,8 @@ MIN_HOLD_SEC = 0.35  # zo lang schoon ingedrukt houden voordat een modifier als 
 
 
 # ── Gedeelde, muteerbare status ─────────────────────────────────────────
+_state_lock = threading.Lock()
+
 state = {
     "engine": dictate.ENGINE,
     "language": dictate.LANGUAGE,
@@ -306,13 +346,28 @@ def handle_release():
                 state["last"] = "Command: geen tekst geselecteerd"
                 threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
                 return
+            state["last"] = "Commando verwerken…"
             text = dictate.transform_command(wav, sel, language=state["language"], engine=state["engine"])
         elif mode == "translate":
+            state["last"] = "Transcriberen…"
             text = dictate.run_pipeline(wav, engine=state["engine"], language=state["language"],
                                         postprocess=state["translate_target"])
         else:
-            text = dictate.run_pipeline(wav, engine=state["engine"],
-                                        language=state["language"], postprocess=state["postprocess"])
+            eng = state["engine"]
+            pp  = state["postprocess"]
+            if eng == "managed" or pp in ("off", ""):
+                text = dictate.run_pipeline(wav, engine=eng,
+                                            language=state["language"], postprocess=pp)
+            else:
+                state["last"] = "Transcriberen…"
+                dictate.check_access(eng)
+                raw = dictate.transcribe(wav, eng, state["language"])
+                raw = dictate.finalize_text(raw)
+                if raw.strip():
+                    state["last"] = "Nabewerken…"
+                    text = dictate.postprocess_text(raw, pp)
+                else:
+                    text = raw
         dt = time.time() - t0
         if not text:
             state["last"] = "(geen spraak herkend)"
@@ -320,8 +375,28 @@ def handle_release():
             return
         print(f"  ✅ ({dt:.2f}s) → {text}")
         state["last"] = text
-        _restore_focus(state.get("target_hwnd", 0))
-        dictate.paste_text(text)
+        hwnd = state.get("target_hwnd", 0)
+
+        # Paste uitvoeren op de overlay-thread (Tkinter-mainloop = Win32 message queue
+        # aanwezig → SetForegroundWindow werkt hier wél, anders faalt het silently).
+        _paste_done = threading.Event()
+
+        def _paste_on_tk():
+            try:
+                _restore_focus(hwnd)
+                dictate.paste_text(text)
+            except Exception as _e:
+                print(f"  ⚠️ paste: {_e}")
+            finally:
+                _paste_done.set()
+
+        if dictate.IS_WIN and overlay_ui.root:
+            overlay_ui.root.after(0, _paste_on_tk)
+            _paste_done.wait(timeout=3.0)
+        else:
+            _restore_focus(hwnd)
+            dictate.paste_text(text)
+
         threading.Thread(target=lambda: dictate.beep("done"), daemon=True).start()
         if state.get("history"):
             dictate.add_history(text)
@@ -390,52 +465,58 @@ def _begin(matchers, mode, needs_arming):
 
 
 def on_press(key):
-    pressed.add(key)
-    if _keypicking or not state["enabled"] or state["busy"]:
-        return
-    hit = next(((mt, md, am) for mt, md, am in HOTKEYS_LIST if _satisfied(mt)), None)
-    if state["phase"] == "idle":
-        if hit:
-            _begin(hit[0], hit[1], hit[2])
-        return
-    if state["phase"] == "arming":
-        active = state.get("active_matchers") or []
-        if hit and hit[0] != active and len(hit[0]) >= len(active):
-            # tweede toets erbij → schakel over naar de specifiekere combo
-            if arm["timer"]:
-                arm["timer"].cancel()
-            arm["aborted"] = False
-            state["active_matchers"] = hit[0]
-            state["active_mode"] = hit[1]
-            if hit[2]:
-                arm["timer"] = threading.Timer(MIN_HOLD_SEC, _confirm_arming)
-                arm["timer"].start()
-            else:
-                threading.Thread(target=lambda: dictate.beep("start"), daemon=True).start()
-                set_phase("recording")
+    try:
+        pressed.add(key)
+        if _keypicking or not state["enabled"] or state["busy"]:
             return
-        # toets die bij geen actieve hotkey hoort → het was een snelkoppeling
-        if not any(key in m for m in active):
-            arm["aborted"] = True
+        hit = next(((mt, md, am) for mt, md, am in HOTKEYS_LIST if _satisfied(mt)), None)
+        if state["phase"] == "idle":
+            if hit:
+                _begin(hit[0], hit[1], hit[2])
+            return
+        if state["phase"] == "arming":
+            active = state.get("active_matchers") or []
+            if hit and hit[0] != active and len(hit[0]) >= len(active):
+                # tweede toets erbij → schakel over naar de specifiekere combo
+                if arm["timer"]:
+                    arm["timer"].cancel()
+                arm["aborted"] = False
+                state["active_matchers"] = hit[0]
+                state["active_mode"] = hit[1]
+                if hit[2]:
+                    arm["timer"] = threading.Timer(MIN_HOLD_SEC, _confirm_arming)
+                    arm["timer"].start()
+                else:
+                    threading.Thread(target=lambda: dictate.beep("start"), daemon=True).start()
+                    set_phase("recording")
+                return
+            # toets die bij geen actieve hotkey hoort → het was een snelkoppeling
+            if not any(key in m for m in active):
+                arm["aborted"] = True
+    except Exception as e:
+        print(f"on_press error: {e}")
 
 
 def on_release(key):
-    pressed.discard(key)
-    if state["phase"] not in ("arming", "recording"):
-        return
-    active = state.get("active_matchers")
-    if not active or _satisfied(active):
-        return                       # combo nog volledig ingedrukt → niks doen
-    if state["phase"] == "arming":
-        # te snel losgelaten of afgebroken → stil weggooien
-        if arm["timer"]:
-            arm["timer"].cancel()
-        recorder.stop()
-        set_phase("idle")
-        return
-    state["busy"] = True
-    set_phase("working")
-    threading.Thread(target=handle_release, daemon=True).start()
+    try:
+        pressed.discard(key)
+        if state["phase"] not in ("arming", "recording"):
+            return
+        active = state.get("active_matchers")
+        if not active or _satisfied(active):
+            return                       # combo nog volledig ingedrukt → niks doen
+        if state["phase"] == "arming":
+            # te snel losgelaten of afgebroken → stil weggooien
+            if arm["timer"]:
+                arm["timer"].cancel()
+            recorder.stop()
+            set_phase("idle")
+            return
+        state["busy"] = True
+        set_phase("working")
+        threading.Thread(target=handle_release, daemon=True).start()
+    except Exception as e:
+        print(f"on_release error: {e}")
 
 
 # ── Menu-acties ─────────────────────────────────────────────────────────
@@ -1077,9 +1158,17 @@ def open_dashboard(start_tab="instellingen"):
         global _keypicking
         _keypicking = False
         pressed.clear()
-        state["hotkey_name"]      = g_dict()
-        state["hotkey_command"]   = g_cmd()
-        state["hotkey_translate"] = g_tr()
+        hk_d, hk_c, hk_t = g_dict(), g_cmd(), g_tr()
+        actieve = [v for v in (hk_d, hk_c, hk_t) if v and v != "uit"]
+        if len(actieve) != len(set(actieve)):
+            import tkinter.messagebox as mb
+            mb.showwarning("Dubbele sneltoets",
+                           "Twee sneltoetsen zijn hetzelfde. Kies unieke toetsen voor dicteren, command en vertalen.",
+                           parent=root)
+            return
+        state["hotkey_name"]      = hk_d
+        state["hotkey_command"]   = hk_c
+        state["hotkey_translate"] = hk_t
         state["language"]         = g_lang()
         state["translate_target"] = g_tgt()
         state["engine"]           = g_eng()
@@ -1190,25 +1279,72 @@ def open_dashboard(start_tab="instellingen"):
 
 
 def _install_update(new_version: str, parent_window=None):
-    """Download nieuwe exe en vervang na afsluiten (alleen Windows, frozen)."""
-    import urllib.request, tempfile
+    """Download de nieuwe exe en vervang de huidige na afsluiten (Windows, frozen).
+
+    Robuust tegen de PyInstaller one-file valkuilen:
+    • De updater-cmd draait DETACHED met cwd buiten _MEI en close_fds, zodat hij de
+      _MEI-map niet vasthoudt (anders faalt de cleanup → blokkerende waarschuwing).
+    • Een retry-copy-loop wacht tot de oude exe het bestand vrijgeeft (i.p.v. een
+      vaste 2s-wacht die vaak te kort is).
+    • os._exit(0) geeft de exe-lock ONMIDDELLIJK vrij en slaat de bootloader-cleanup
+      over die anders de modale 'Failed to remove temporary directory'-waarschuwing
+      toont en het afsluiten blokkeerde (oude sys.exit liep bovendien op een
+      daemon-thread → beëindigde het proces niet).
+    • De bat ruimt achtergebleven _MEI-mappen op vóór de herstart.
+    """
+    import urllib.request, tempfile, subprocess
     try:
         tmp = Path(tempfile.gettempdir()) / "Lazytype_update.exe"
         urllib.request.urlretrieve("https://lazytype.com/downloads/Lazytype.exe", tmp)
+        if not tmp.exists() or tmp.stat().st_size < 1_000_000:
+            raise RuntimeError("Download onvolledig of mislukt — probeer het opnieuw.")
         exe = Path(sys.executable)
         bat = Path(tempfile.gettempdir()) / "lazytype_update.bat"
         bat.write_text(
-            f"@echo off\r\ntimeout /t 2 /nobreak >nul\r\n"
-            f"copy /y \"{tmp}\" \"{exe}\"\r\n"
-            f"start \"\" \"{exe}\"\r\ndel \"%~f0\"\r\n",
-            encoding="utf-8")
-        import subprocess
-        subprocess.Popen(["cmd", "/c", str(bat)], creationflags=0x08000000)
-        if parent_window:
-            parent_window.destroy()
-        if icon:
-            icon.stop()
-        sys.exit(0)
+            "@echo off\r\n"
+            f'set "SRC={tmp}"\r\n'
+            f'set "DST={exe}"\r\n'
+            "set /a n=0\r\n"
+            ":retry\r\n"
+            "set /a n+=1\r\n"
+            "if %n% gtr 60 goto launch\r\n"
+            "ping -n 2 127.0.0.1 >nul\r\n"          # ~1s wacht (timeout faalt in detached cmd)
+            'copy /y "%SRC%" "%DST%" >nul 2>&1\r\n'
+            "if errorlevel 1 goto retry\r\n"        # exe nog vergrendeld → opnieuw proberen
+            ":launch\r\n"
+            # GEEN _MEI-sweep hier: die verwijderde tijdens de afsluit-race een nog
+            # gebruikte _MEI-map → "Failed to load Python DLL". Opruimen gebeurt nu
+            # veilig bij het opstarten (_cleanup_stale_mei), met overslaan van mappen
+            # die nog vergrendeld of recent zijn.
+            'start "" "%DST%"\r\n'
+            'del "%SRC%" >nul 2>&1\r\n'
+            'del "%~f0" >nul 2>&1\r\n',
+            encoding="ascii")
+        DETACHED_PROCESS          = 0x00000008
+        CREATE_NEW_PROCESS_GROUP  = 0x00000200
+        CREATE_NO_WINDOW          = 0x08000000
+        subprocess.Popen(
+            ["cmd", "/c", str(bat)],
+            cwd=tempfile.gettempdir(),   # NIET _MEI → bootloader kan straks opruimen
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
+            close_fds=True,
+        )
+        try:
+            if parent_window:
+                parent_window.destroy()
+        except Exception:
+            pass
+        try:
+            if icon:
+                icon.visible = False
+                icon.stop()
+        except Exception:
+            pass
+        try:
+            overlay_ui.stop()
+        except Exception:
+            pass
+        os._exit(0)   # direct uit: geeft lock vrij + geen blokkerende _MEI-waarschuwing
     except Exception as e:
         import tkinter.messagebox as mb
         mb.showerror("Update mislukt", str(e))
@@ -1504,6 +1640,14 @@ def run_onboarding():
                             ("translate_target", "DICTATE_TRANSLATE_TARGET"),
                             ("language",         "DICTATE_LANGUAGE")):
                 dictate.save_env_value(envk, state[k])
+            # Als er een (trial/pro/lifetime) licentie is, gebruik de managed-engine.
+            # Anders blijft 'state' op de stale default "groq" zonder key staan → geen transcriptie.
+            if os.environ.get("LAZYTYPE_LICENSE"):
+                import license as _lic
+                _p = _lic.decode(os.environ["LAZYTYPE_LICENSE"])
+                if _p and _lic.TIERS.get(_p.get("tier"), {}).get("managed"):
+                    state["engine"] = "managed"
+                    dictate.save_env_value("DICTATE_ENGINE", "managed")
             dictate.save_env_value("DICTATE_ONBOARDED", "1")
             rebuild_hotkeys()
             root.destroy()
@@ -1696,7 +1840,14 @@ class Overlay:
         try: root.attributes("-alpha", 0.25)
         except Exception: pass
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{self.W}x{self.H}+{(sw - self.W) // 2}+{sh - self.H - 60}")
+        saved_pos = os.environ.get("DICTATE_OVERLAY_POS", "")
+        try:
+            ox, oy = (int(v) for v in saved_pos.split(","))
+            ox = max(0, min(ox, sw - self.W))
+            oy = max(0, min(oy, sh - self.H))
+        except Exception:
+            ox, oy = (sw - self.W) // 2, sh - self.H - 60
+        root.geometry(f"{self.W}x{self.H}+{ox}+{oy}")
         self.cv = tk.Canvas(root, width=self.W, height=self.H,
                             highlightthickness=0, bg=transp, cursor="hand2")
         self.cv.pack()
@@ -1810,7 +1961,12 @@ class Overlay:
 
     def _release(self, e):
         moved, self._drag = self._moved, None
-        if moved: return
+        if moved:
+            x, y = self.root.winfo_x(), self.root.winfo_y()
+            threading.Thread(
+                target=lambda: dictate.save_env_value("DICTATE_OVERLAY_POS", f"{x},{y}"),
+                daemon=True).start()
+            return
         for x0, x1, y0, y1, cb in self._chips:
             if x0 <= e.x <= x1 and y0 <= e.y <= y1:
                 cb(); return
@@ -1918,6 +2074,7 @@ def main():
     listener.start()
     threading.Thread(target=_check_update, daemon=True).start()
     threading.Thread(target=dictate.verify_personal_key, daemon=True).start()
+    threading.Thread(target=_cleanup_stale_mei, daemon=True).start()
 
     print("=" * 58)
     print("  🎙️  Lazytype (systeemvak) is actief")

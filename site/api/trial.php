@@ -41,6 +41,15 @@ try {
     init_db();
     $db = get_db();
 
+    // Weiger trial als dit e-mailadres al een actief abonnement heeft
+    $chk = $db->prepare("SELECT id FROM purchases WHERE email = ? AND status = 'active' LIMIT 1");
+    $chk->execute([$email]);
+    if ($chk->fetch()) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'Je hebt al een actief Lazytype-abonnement voor dit e-mailadres']);
+        exit;
+    }
+
     // Geef bestaande niet-verlopen sleutel terug
     $stmt = $db->prepare("SELECT license_key FROM trials WHERE email = ? AND expires_at > NOW() LIMIT 1");
     $stmt->execute([$email]);

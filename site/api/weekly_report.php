@@ -1,10 +1,11 @@
 <?php
 // Weekly report — run via cron: 0 8 * * 1 (every Monday 08:00)
-// URL access: /api/weekly_report.php?token=<ADMIN_PASSWORD>
+// HTTP access: Authorization: Bearer <ADMIN_PASSWORD>
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 
-$token = $_GET['token'] ?? '';
+$auth  = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+$token = preg_replace('/^Bearer\s+/i', '', $auth);
 if (php_sapi_name() !== 'cli' && !hash_equals(ADMIN_PASSWORD, $token)) {
     http_response_code(403);
     exit('Forbidden');
@@ -22,34 +23,55 @@ $now   = new DateTime();
 $week  = (clone $now)->modify('-7 days')->format('Y-m-d');
 $month = (clone $now)->modify('-30 days')->format('Y-m-d');
 
-$dl_week    = (int)$db->query("SELECT COUNT(*) FROM downloads WHERE created_at >= '$week'")->fetchColumn();
-$dl_month   = (int)$db->query("SELECT COUNT(*) FROM downloads WHERE created_at >= '$month'")->fetchColumn();
-$dl_total   = (int)$db->query("SELECT COUNT(*) FROM downloads")->fetchColumn();
+function q_count(PDO $db, string $table, string $since): int {
+    $s = $db->prepare("SELECT COUNT(*) FROM $table WHERE created_at >= ?");
+    $s->execute([$since]);
+    return (int)$s->fetchColumn();
+}
 
-$v_week     = (int)$db->query("SELECT COUNT(*) FROM page_views WHERE created_at >= '$week'")->fetchColumn();
-$v_uniq_w   = (int)$db->query("SELECT COUNT(DISTINCT ip) FROM page_views WHERE created_at >= '$week'")->fetchColumn();
-$v_month    = (int)$db->query("SELECT COUNT(*) FROM page_views WHERE created_at >= '$month'")->fetchColumn();
+$dl_week  = q_count($db, 'downloads',  $week);
+$dl_month = q_count($db, 'downloads',  $month);
+$dl_total = (int)$db->query("SELECT COUNT(*) FROM downloads")->fetchColumn();
 
-$rev_week   = (int)$db->query("SELECT COALESCE(SUM(amount_cents),0) FROM purchases WHERE status='active' AND created_at >= '$week'")->fetchColumn();
-$rev_month  = (int)$db->query("SELECT COALESCE(SUM(amount_cents),0) FROM purchases WHERE status='active' AND created_at >= '$month'")->fetchColumn();
-$new_users  = (int)$db->query("SELECT COUNT(*) FROM purchases WHERE status='active' AND created_at >= '$week'")->fetchColumn();
+$v_week   = q_count($db, 'page_views', $week);
+$v_month  = q_count($db, 'page_views', $month);
 
-$sources = $db->query("
+$stmt = $db->prepare("SELECT COUNT(DISTINCT ip) FROM page_views WHERE created_at >= ?");
+$stmt->execute([$week]);
+$v_uniq_w = (int)$stmt->fetchColumn();
+
+$stmt = $db->prepare("SELECT COALESCE(SUM(amount_cents),0) FROM purchases WHERE status='active' AND created_at >= ?");
+$stmt->execute([$week]);
+$rev_week = (int)$stmt->fetchColumn();
+
+$stmt = $db->prepare("SELECT COALESCE(SUM(amount_cents),0) FROM purchases WHERE status='active' AND created_at >= ?");
+$stmt->execute([$month]);
+$rev_month = (int)$stmt->fetchColumn();
+
+$stmt = $db->prepare("SELECT COUNT(*) FROM purchases WHERE status='active' AND created_at >= ?");
+$stmt->execute([$week]);
+$new_users = (int)$stmt->fetchColumn();
+
+$stmt = $db->prepare("
     SELECT utm_source, referrer, COUNT(*) as cnt
     FROM page_views
-    WHERE created_at >= '$week'
+    WHERE created_at >= ?
     GROUP BY utm_source, LEFT(referrer,80)
     ORDER BY cnt DESC
     LIMIT 8
-")->fetchAll();
+");
+$stmt->execute([$week]);
+$sources = $stmt->fetchAll();
 
-$purchases = $db->query("
+$stmt = $db->prepare("
     SELECT email, plan, amount_cents, created_at
     FROM purchases
-    WHERE created_at >= '$week'
+    WHERE created_at >= ?
     ORDER BY created_at DESC
     LIMIT 20
-")->fetchAll();
+");
+$stmt->execute([$week]);
+$purchases = $stmt->fetchAll();
 
 function fmt_eur(int $cents): string {
     return '€' . number_format($cents / 100, 2, ',', '.');

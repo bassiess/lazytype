@@ -18,7 +18,9 @@ header('Content-Type: application/json');
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function b64d(string $s): string {
-    return base64_decode(str_replace(['-', '_'], ['+', '/'], $s) . str_repeat('=', (-strlen($s)) % 4));
+    $pad = strlen($s) % 4;
+    if ($pad) { $s .= str_repeat('=', 4 - $pad); }
+    return base64_decode(strtr($s, '-_', '+/'));
 }
 function b64e_raw(string $bytes): string {
     return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
@@ -65,6 +67,10 @@ if ($device) {
     try {
         init_db();
         $db = get_db();
+        // Zelfde slot-vullende logica als verify.php: bekend → OK; lege slot → vullen;
+        // beide slots bezet door andere apparaten → weigeren. (Voorheen accepteerde
+        // transcribe.php élk apparaat zolang één slot leeg was én vulde nooit een slot,
+        // waardoor de 2-apparaten-limiet de facto niet werd gehandhaafd.)
         if ($tier === 'trial') {
             $stmt = $db->prepare("SELECT device, device_2 FROM trials WHERE license_key = ? LIMIT 1");
             $stmt->execute([$license]);
@@ -72,10 +78,15 @@ if ($device) {
             if ($row !== false) {
                 $d1 = $row['device']   ?? '';
                 $d2 = $row['device_2'] ?? '';
-                $known = ($device === $d1 || $device === $d2 || !$d1 || !$d2);
-                if (!$known) {
+                if ($device === $d1 || $device === $d2) {
+                    // bekend apparaat — OK
+                } elseif (!$d1) {
+                    $db->prepare("UPDATE trials SET device   = ? WHERE license_key = ?")->execute([$device, $license]);
+                } elseif (!$d2) {
+                    $db->prepare("UPDATE trials SET device_2 = ? WHERE license_key = ?")->execute([$device, $license]);
+                } else {
                     http_response_code(403);
-                    echo json_encode(['error' => 'Sleutel al in gebruik op 2 apparaten']);
+                    echo json_encode(['error' => 'Sleutel al in gebruik op 2 apparaten. Mail support@lazytype.com voor overdracht.']);
                     exit;
                 }
             }
@@ -86,10 +97,15 @@ if ($device) {
             if ($row !== false) {
                 $d1 = $row['device_id']   ?? '';
                 $d2 = $row['device_id_2'] ?? '';
-                $known = ($device === $d1 || $device === $d2 || !$d1 || !$d2);
-                if (!$known) {
+                if ($device === $d1 || $device === $d2) {
+                    // bekend apparaat — OK
+                } elseif (!$d1) {
+                    $db->prepare("UPDATE purchases SET device_id   = ? WHERE license_key = ?")->execute([$device, $license]);
+                } elseif (!$d2) {
+                    $db->prepare("UPDATE purchases SET device_id_2 = ? WHERE license_key = ?")->execute([$device, $license]);
+                } else {
                     http_response_code(403);
-                    echo json_encode(['error' => 'Sleutel al geactiveerd op 2 apparaten']);
+                    echo json_encode(['error' => 'Sleutel al geactiveerd op 2 apparaten. Mail support@lazytype.com voor overdracht.']);
                     exit;
                 }
             }
@@ -112,10 +128,31 @@ if ($_FILES['file']['size'] > 25 * 1024 * 1024) {
 }
 $wav = $_FILES['file']['tmp_name'];
 
-// ── Groq API aanroepen ────────────────────────────────────────────────────
-$language = $_POST['language'] ?? 'auto';
-$prompt   = $_POST['prompt']   ?? '';
+// ── Input validatie ───────────────────────────────────────────────────────
+$language    = trim($_POST['language']    ?? 'auto');
+$prompt      = substr(trim($_POST['prompt']  ?? ''), 0, 500);
+$postprocess = trim($_POST['postprocess'] ?? 'off');
+$command     = substr(trim($_POST['command']  ?? ''), 0, 4000);
 
+$valid_langs = ['auto','af','sq','am','ar','hy','as','az','ba','eu','be','bn','bs','br','bg',
+                'my','ca','zh','hr','cs','da','nl','en','et','fo','fi','fr','gl','ka','de',
+                'el','gu','ht','ha','haw','he','hi','hu','is','id','it','ja','jw','kn','kk',
+                'km','ko','lo','la','lv','ln','lt','lb','mk','mg','ms','ml','mt','mi','mr',
+                'mn','ne','no','nn','oc','ps','fa','pl','pt','pa','ro','ru','sa','sr','sn',
+                'sd','si','sk','sl','so','es','su','sw','sv','tl','tg','ta','tt','te','th',
+                'bo','tr','tk','uk','ur','uz','vi','cy','yi','yo'];
+if (!in_array($language, $valid_langs, true)) {
+    $language = 'auto';
+}
+
+$valid_pp = ['off','clean'];
+$is_valid_pp = in_array($postprocess, $valid_pp, true)
+               || preg_match('/^[a-z]{2}$/', $postprocess);
+if (!$is_valid_pp) {
+    $postprocess = 'off';
+}
+
+// ── Groq API aanroepen ────────────────────────────────────────────────────
 $fields = [
     'model'           => 'whisper-large-v3-turbo',
     'response_format' => 'json',
@@ -154,4 +191,74 @@ if ($http_code !== 200) {
 }
 
 $data = json_decode($body, true);
-echo json_encode(['text' => trim($data['text'] ?? '')]);
+$text = trim($data['text'] ?? '');
+
+// ── Nabewerking via Groq chat (vertalen / opschonen / command-mode) ─────────
+// De client (managed-engine) stuurt postprocess + command mee; vroeger negeerde
+// de server die, waardoor vertalen/opschonen/command voor Pro+trial niet werkte.
+function groq_chat(string $system, string $user): ?string {
+    $payload = json_encode([
+        'model'       => 'llama-3.3-70b-versatile',
+        'temperature' => 0,
+        'messages'    => [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user',   'content' => $user],
+        ],
+    ]);
+    $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . GROQ_API_KEY,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_TIMEOUT        => 45,
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if ($code !== 200 || $resp === false) {
+        return null;
+    }
+    $j = json_decode($resp, true);
+    $out = trim($j['choices'][0]['message']['content'] ?? '');
+    return $out !== '' ? $out : null;
+}
+
+$LANG_NAMES = [
+    'nl' => 'Dutch', 'en' => 'English', 'de' => 'German', 'fr' => 'French',
+    'es' => 'Spanish', 'it' => 'Italian', 'pt' => 'Portuguese', 'pl' => 'Polish',
+    'ru' => 'Russian', 'uk' => 'Ukrainian', 'sv' => 'Swedish', 'tr' => 'Turkish',
+    'ar' => 'Arabic', 'ja' => 'Japanese', 'zh' => 'Chinese', 'ko' => 'Korean',
+];
+
+if ($text !== '') {
+    if ($command !== '') {
+        // Command-mode: gesproken tekst = instructie, $command = geselecteerde tekst
+        $system = 'You edit text according to a spoken instruction. Apply the instruction to '
+                . "the user's text and output ONLY the resulting text — no preamble, no quotes, "
+                . 'no explanation. Keep the original language unless the instruction says otherwise.';
+        $edited = groq_chat($system, "Instruction: {$text}\n\nText:\n{$command}");
+        if ($edited !== null) { $text = $edited; }
+    } elseif ($postprocess === 'clean') {
+        $system = 'You polish raw speech-to-text dictation. Remove filler words, false starts, '
+                . 'repetitions and stutters; fix punctuation, capitalization and obvious '
+                . 'mis-transcriptions. Keep the EXACT same language as the input — never '
+                . 'translate. Preserve the original meaning and tone. Do not add, summarize, '
+                . 'explain or answer anything. Output ONLY the cleaned text.';
+        $clean = groq_chat($system, $text);
+        if ($clean !== null) { $text = $clean; }
+    } elseif ($postprocess !== '' && $postprocess !== 'off') {
+        $target = $LANG_NAMES[$postprocess] ?? $postprocess;
+        $system = "You post-process raw speech-to-text dictation. Translate it into {$target}. "
+                . 'Also clean it up: drop filler words, false starts and stutters, and fix '
+                . 'punctuation and capitalization so it reads naturally for a native speaker. '
+                . 'Preserve the original meaning and tone. Do not add, summarize, explain or '
+                . "answer anything. Output ONLY the final {$target} text, nothing else.";
+        $translated = groq_chat($system, $text);
+        if ($translated !== null) { $text = $translated; }
+    }
+}
+
+echo json_encode(['text' => $text]);

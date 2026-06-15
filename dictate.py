@@ -24,6 +24,7 @@ import io
 import os
 import re
 import sys
+import math
 import time
 import wave
 import subprocess
@@ -745,21 +746,100 @@ def _clipboard_set(text: str) -> bool:
     return False
 
 
-def paste_text(text: str):
-    from pynput.keyboard import Controller, Key
+def _paste_win32(text: str):
+    """Plak via directe Win32-calls (betrouwbaarder dan pyperclip + pynput in frozen exe)."""
+    import ctypes
+    from ctypes import wintypes, c_void_p, c_size_t
+    u32 = ctypes.windll.user32
+    k32 = ctypes.windll.kernel32
 
+    # KRITIEK op 64-bit Windows: zonder expliciete restype kapt ctypes de
+    # teruggegeven HANDLE/pointer af tot 32-bit → corrupt geheugenadres → crash
+    # of falende paste. Declareer daarom alle pointer-/handle-types expliciet.
+    k32.GlobalAlloc.restype  = c_void_p
+    k32.GlobalAlloc.argtypes = [wintypes.UINT, c_size_t]
+    k32.GlobalLock.restype   = c_void_p
+    k32.GlobalLock.argtypes  = [c_void_p]
+    k32.GlobalUnlock.argtypes = [c_void_p]
+    u32.SetClipboardData.restype  = c_void_p
+    u32.SetClipboardData.argtypes = [wintypes.UINT, c_void_p]
+    u32.OpenClipboard.argtypes    = [c_void_p]
+
+    previous = _clipboard_get() if RESTORE_CLIPBOARD else None
+
+    # Klembord instellen via Win32 (CF_UNICODETEXT)
+    CF_UNICODETEXT = 13
+    GMEM_MOVEABLE  = 0x0002
+    data = text.encode("utf-16-le") + b"\x00\x00"
+    ok = False
+    for _ in range(12):
+        try:
+            if u32.OpenClipboard(None):
+                try:
+                    u32.EmptyClipboard()
+                    h = k32.GlobalAlloc(GMEM_MOVEABLE, len(data))
+                    if h:
+                        ptr = k32.GlobalLock(h)
+                        if ptr:
+                            ctypes.memmove(ptr, data, len(data))
+                            k32.GlobalUnlock(h)
+                            # Eigenaarschap van h gaat over naar het systeem; NIET GlobalFree'en.
+                            if u32.SetClipboardData(CF_UNICODETEXT, h):
+                                ok = True
+                finally:
+                    u32.CloseClipboard()
+                if ok:
+                    break
+        except Exception:
+            pass
+        time.sleep(0.05)
+
+    if not ok:
+        print("  (klembord mislukt — tekst wordt getypt)")
+        try:
+            from pynput.keyboard import Controller
+            Controller().type(text)
+        except Exception as e:
+            print(f"  (type ook mislukt: {e})")
+        return
+
+    time.sleep(0.05)
+
+    # Ctrl+V via keybd_event (omzeilt mogelijke pynput-Controller interferentie)
+    VK_CONTROL    = 0x11
+    VK_V          = 0x56
+    KEYEVENTF_UP  = 0x0002
+    u32.keybd_event(VK_CONTROL, 0, 0,            0)
+    time.sleep(0.01)
+    u32.keybd_event(VK_V,       0, 0,            0)
+    u32.keybd_event(VK_V,       0, KEYEVENTF_UP, 0)
+    time.sleep(0.01)
+    u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_UP, 0)
+
+    if RESTORE_CLIPBOARD and previous is not None and previous != text:
+        def _restore():
+            time.sleep(0.6)
+            _clipboard_set(previous)
+        threading.Thread(target=_restore, daemon=True).start()
+
+
+def paste_text(text: str):
     if not text:
         return
     if TRAILING_SPACE and not text.endswith(" "):
         text += " "
 
+    if IS_WIN:
+        _paste_win32(text)
+        return
+
+    # macOS: pyperclip + pynput Cmd+V
+    from pynput.keyboard import Controller, Key
     kb = Controller()
     previous = _clipboard_get() if RESTORE_CLIPBOARD else None
-    paste_mod = Key.cmd if IS_MAC else Key.ctrl  # macOS plakt met Cmd+V
-
     if _clipboard_set(text):
         time.sleep(0.05)
-        with kb.pressed(paste_mod):
+        with kb.pressed(Key.cmd):
             kb.press("v")
             kb.release("v")
         if RESTORE_CLIPBOARD and previous is not None:
@@ -768,7 +848,6 @@ def paste_text(text: str):
                 _clipboard_set(previous)
             threading.Thread(target=restore, daemon=True).start()
     else:
-        # Klembord onbereikbaar → typ de tekst rechtstreeks (trager, maar werkt altijd)
         print("  (klembord bezet — tekst wordt getypt)")
         kb.type(text)
 
@@ -778,21 +857,75 @@ _WIN_BEEP = {"start": (1050, 120), "stop": (540, 110), "done": (880, 120), "erro
 _MAC_SOUND = {"start": "Tink", "stop": "Pop", "done": "Pop", "error": "Basso"}
 
 
+_BEEP_RATE = 22050
+
+
+def _make_tone_pcm(freq: int, dur_ms: int, volume: float = 0.5, rate: int = _BEEP_RATE) -> bytes:
+    """Bouw een kort sine-toontje als ruwe 16-bit mono PCM, met fade-in/out tegen klikken."""
+    import struct
+    n = max(1, int(rate * dur_ms / 1000))
+    fade = max(1, int(n * 0.08))
+    out = bytearray()
+    for i in range(n):
+        amp = volume
+        if i < fade:
+            amp *= i / fade
+        elif i > n - fade:
+            amp *= (n - i) / fade
+        out += struct.pack("<h", int(amp * 32767 * math.sin(2 * math.pi * freq * i / rate)))
+    return bytes(out)
+
+
+def _pcm_to_wav(pcm: bytes, rate: int = _BEEP_RATE) -> bytes:
+    import struct
+    return (b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVE"
+            + b"fmt " + struct.pack("<IHHIIHH", 16, 1, 1, rate, rate * 2, 2, 16)
+            + b"data" + struct.pack("<I", len(pcm)) + pcm)
+
+
+_TONE_PCM_CACHE: dict = {}
+
+
 def beep(kind: str):
-    try:
-        if IS_WIN:
-            import winsound
-            freq, dur = _WIN_BEEP.get(kind, (880, 80))
-            winsound.Beep(freq, dur)
-        elif IS_MAC:
+    """Speel een korte feedbacktoon.
+
+    Primair via sounddevice (PortAudio) — exact hetzelfde audiopad als de
+    mic-opname, dus betrouwbaar hoorbaar. winsound.Beep() (PC-speaker) en
+    PlaySound bleken op moderne laptops vaak onhoorbaar; sounddevice niet.
+    """
+    if IS_MAC:
+        try:
             name = _MAC_SOUND.get(kind, "Tink")
-            # niet-blokkerend afspelen
             subprocess.Popen(
                 ["afplay", f"/System/Library/Sounds/{name}.aiff"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
-        else:
-            print("\a", end="", flush=True)  # Linux: terminal-bel
+        except Exception:
+            pass
+        return
+
+    freq, dur = _WIN_BEEP.get(kind, (880, 80))
+    pcm = _TONE_PCM_CACHE.get(kind)
+    if pcm is None:
+        pcm = _make_tone_pcm(freq, dur)
+        _TONE_PCM_CACHE[kind] = pcm
+
+    # 1) sounddevice — zelfde uitvoer-subsysteem als de opname (betrouwbaar)
+    try:
+        import sounddevice as sd
+        s = sd.RawOutputStream(samplerate=_BEEP_RATE, channels=1, dtype="int16")
+        s.start()
+        s.write(pcm)
+        s.stop()
+        s.close()
+        return
+    except Exception:
+        pass
+
+    # 2) winsound-fallback (Windows) als sounddevice-output niet beschikbaar is
+    try:
+        import winsound
+        winsound.PlaySound(_pcm_to_wav(pcm), winsound.SND_MEMORY | winsound.SND_ASYNC)
     except Exception:
         pass
 
