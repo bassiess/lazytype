@@ -38,3 +38,12 @@ curl.exe --ftp-pasv -T "site\index.html" "ftp://82.29.191.209/index.html" --user
 - **Repo**: https://github.com/bassiess/lazytype.git
 - **Branch**: master
 - **Taal**: Nederlands (communiceer in NL)
+
+### GitHub account voor git push
+
+`gh` heeft meerdere accounts. De repo is van `bassiess` — altijd eerst switchen voor een push:
+
+```powershell
+gh auth switch --hostname github.com --user bassiess
+git push origin master
+```
