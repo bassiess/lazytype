@@ -51,8 +51,15 @@ if getattr(sys, "frozen", False):
     ROOT.mkdir(parents=True, exist_ok=True)
     _old_env = Path(sys.executable).resolve().parent / ".env"
     if _old_env.exists() and not (ROOT / ".env").exists():
-        import shutil as _shutil
-        _shutil.copy2(_old_env, ROOT / ".env")
+        # Migreer alleen API-keys/device, nooit onboarding-staat of hotkey-prefs.
+        _no_migrate = {"DICTATE_ONBOARDED", "DICTATE_HOTKEY", "DICTATE_COMMAND_HOTKEY",
+                       "DICTATE_TRANSLATE_HOTKEY", "DICTATE_TRANSLATE_TARGET",
+                       "DICTATE_LANGUAGE", "DICTATE_POSTPROCESS", "DICTATE_OVERLAY"}
+        _lines = [l for l in _old_env.read_text(encoding="utf-8").splitlines()
+                  if l.strip() and not l.strip().startswith("#")
+                  and l.split("=", 1)[0].strip() not in _no_migrate]
+        if _lines:
+            (ROOT / ".env").write_text("\n".join(_lines) + "\n", encoding="utf-8")
 else:
     ROOT = Path(__file__).resolve().parent
 
@@ -289,13 +296,13 @@ def license_state() -> dict:
     Owner (geheim aanwezig) = onbeperkt. Geldige Personal/Pro-sleutel telt; anders
     een lokale 14-daagse proef (BYOK), daarna geblokkeerd tot aankoop."""
     p = license_payload()
-    if p and p.get("tier") in ("personal", "pro", "trial"):
+    if p and p.get("tier") in ("personal", "pro", "trial", "lifetime"):
         exp = int(p.get("exp", 0) or 0)
         if (not exp or time.time() <= exp) and _license_server_ok is not False:
             tier = p["tier"]
-            managed = tier in ("pro", "trial")
+            managed = tier in ("pro", "trial", "lifetime")
             when = "" if not exp else " tot " + time.strftime("%Y-%m-%d", time.localtime(exp))
-            labels = {"pro": "Pro", "personal": "Personal", "trial": "Proef"}
+            labels = {"pro": "Pro", "personal": "Personal", "trial": "Proef", "lifetime": "Lifetime"}
             return {"tier": tier, "valid": True, "managed": managed,
                     "days_left": None, "label": labels.get(tier, tier) + when}
     # Fallback: lokale proef zonder sleutel (BYOK, eigen Groq-key vereist)
