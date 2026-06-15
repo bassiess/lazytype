@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.0.8"
+APP_VERSION = "1.0.9"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -90,6 +90,7 @@ state = {
     "overlay": os.environ.get("DICTATE_OVERLAY", "1").lower() in ("1", "true", "yes", "on"),
     "active_mode": "dictate",       # dictate | command | translate (welke flow loopt nu)
     "active_matchers": None,        # welke sneltoets(-combo) de huidige opname startte
+    "target_hwnd": 0,               # venster dat focus had bij indrukken → herstel vóór paste
 }
 
 PHASE_LABEL = {
@@ -319,6 +320,7 @@ def handle_release():
             return
         print(f"  ✅ ({dt:.2f}s) → {text}")
         state["last"] = text
+        _restore_focus(state.get("target_hwnd", 0))
         dictate.paste_text(text)
         threading.Thread(target=lambda: dictate.beep("done"), daemon=True).start()
         if state.get("history"):
@@ -339,7 +341,40 @@ def _confirm_arming():
         set_phase("recording")
 
 
+def _get_foreground_hwnd() -> int:
+    if dictate.IS_WIN:
+        try:
+            import ctypes
+            return ctypes.windll.user32.GetForegroundWindow()
+        except Exception:
+            pass
+    return 0
+
+
+def _restore_focus(hwnd: int):
+    if not hwnd or not dictate.IS_WIN:
+        return
+    try:
+        import ctypes
+        u32 = ctypes.windll.user32
+        k32 = ctypes.windll.kernel32
+        fg = u32.GetForegroundWindow()
+        if fg == hwnd:
+            return
+        fg_tid  = u32.GetWindowThreadProcessId(fg,   None)
+        tgt_tid = u32.GetWindowThreadProcessId(hwnd, None)
+        our_tid = k32.GetCurrentThreadId()
+        u32.AttachThreadInput(our_tid, fg_tid, True)
+        u32.BringWindowToTop(hwnd)
+        u32.SetForegroundWindow(hwnd)
+        u32.AttachThreadInput(our_tid, fg_tid, False)
+        import time as _t; _t.sleep(0.08)
+    except Exception:
+        pass
+
+
 def _begin(matchers, mode, needs_arming):
+    state["target_hwnd"] = _get_foreground_hwnd()
     recorder.start()
     arm["aborted"] = False
     state["active_mode"] = mode
