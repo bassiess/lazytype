@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -350,7 +350,7 @@ def _begin(matchers, mode, needs_arming):
         arm["timer"] = threading.Timer(MIN_HOLD_SEC, _confirm_arming)
         arm["timer"].start()
     else:
-        dictate.beep("start")
+        threading.Thread(target=lambda: dictate.beep("start"), daemon=True).start()
         set_phase("recording")
 
 
@@ -376,7 +376,7 @@ def on_press(key):
                 arm["timer"] = threading.Timer(MIN_HOLD_SEC, _confirm_arming)
                 arm["timer"].start()
             else:
-                dictate.beep("start")
+                threading.Thread(target=lambda: dictate.beep("start"), daemon=True).start()
                 set_phase("recording")
             return
         # toets die bij geen actieve hotkey hoort → het was een snelkoppeling
@@ -1400,7 +1400,7 @@ def run_onboarding():
         logo_row(5)
         try:
             import urllib.request
-            urllib.request.urlopen("https://lazytype.com/api/trial.php", timeout=5)
+            urllib.request.urlopen("https://lazytype.com/version.json", timeout=5)
         except Exception:
             head("No internet connection",
                  "An internet connection is required to start the free trial. "
@@ -1621,14 +1621,14 @@ class Overlay:
     BAR_REC  = "#c084fc"   # helder paars bij opnemen
     BAR_BSY  = "#7c3aed"   # middel paars bij transcriberen
 
-    W = 64    # 4 bars
+    W = 88    # 6 bars
     H = 36
 
     def __init__(self):
         self.root = None; self.thread = None; self.cv = None
         self._t = 0; self._sm = 0.0
-        self._bar_h = [1.5] * 4
-        self._frozen = [4.0, 11.0, 7.0, 9.0]
+        self._bar_h = [1.5] * 6
+        self._frozen = [4.0, 11.0, 7.0, 9.0, 5.0, 8.0]
         self._chips = []; self._drag = None; self._moved = False
         self._alpha = 0.25
 
@@ -1711,10 +1711,10 @@ class Overlay:
         lv = self._sm
 
         # Bar-hoogtes — elke bar eigen tempo + fase voor organisch gevoel
-        _freqs  = [0.43, 0.55, 0.38, 0.62]
-        _phases = [0.0,  0.9,  1.8,  2.7]
+        _freqs  = [0.43, 0.55, 0.38, 0.62, 0.48, 0.52]
+        _phases = [0.0,  0.9,  1.8,  2.7,  3.6,  4.5]
         if ph == "recording":
-            for i in range(4):
+            for i in range(6):
                 osc    = 0.25 + 0.75 * abs(math.sin(self._t * _freqs[i] + _phases[i]))
                 target = 2.0 + lv * 28 * osc + abs(math.sin(self._t * _freqs[i] * 0.6 + i)) * 5
                 target = min(target, H - 4)
@@ -1722,8 +1722,7 @@ class Overlay:
                 self._bar_h[i] += (target - self._bar_h[i]) * speed
                 self._frozen[i] = self._bar_h[i]
         elif ph != "working":
-            # Zachte adem-puls bij rust zodat bars leven hebben
-            for i in range(4):
+            for i in range(6):
                 idle = 1.5 + 0.6 * abs(math.sin(self._t * 0.04 + _phases[i] * 0.4))
                 self._bar_h[i] += (idle - self._bar_h[i]) * 0.06
 
@@ -1738,9 +1737,9 @@ class Overlay:
         self._pill(2, 2, W-2, H-2, 14, self.BORDER)
         self._pill(3, 3, W-3, H-3, 13, bg)
 
-        # 4 paarse verticale bars
+        # 6 paarse verticale bars
         bar_col = self.BAR_REC if ph == "recording" else self.BAR_BSY if ph == "working" else self.BAR_IDLE
-        CENTERS = [14.0, 26.0, 38.0, 50.0]
+        CENTERS = [12.0, 24.0, 36.0, 52.0, 64.0, 76.0]
         heights = self._frozen if ph == "working" else self._bar_h
         for bx, bh in zip(CENTERS, heights):
             cv.create_line(bx, cy - bh/2, bx, cy + bh/2,
