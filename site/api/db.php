@@ -46,6 +46,10 @@ function init_db(): void {
             INDEX idx_expires (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    // Migreer purchases: license_key verbreden voor HMAC-sleutels + device_id toevoegen
+    try { $db->exec("ALTER TABLE purchases MODIFY license_key VARCHAR(400)"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE purchases ADD COLUMN device_id VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
+
     $db->exec("
         CREATE TABLE IF NOT EXISTS downloads (
             id         INT AUTO_INCREMENT PRIMARY KEY,

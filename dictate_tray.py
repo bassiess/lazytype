@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -924,50 +924,253 @@ def _keypicker(tk, parent, label, initial):
     return lambda: val["v"]
 
 
-def _run_settings_window():
-    """Settings-venster op de HUIDIGE thread.
-    Windows: draait in een worker-thread. macOS: draait op de main thread van een subprocess."""
+def open_dashboard(start_tab="instellingen"):
+    """Volledig instellingen-dashboard (tabbladen). Draait op de HUIDIGE thread."""
     import tkinter as tk
-    root = tk.Tk(); root.title("Lazytype — Instellingen")
-    root.configure(bg=UI_PAPER); root.attributes("-topmost", True); root.resizable(False, False)
-    tk.Label(root, text="Sneltoetsen", bg=UI_PAPER, fg=UI_INK,
-             font=("Segoe UI", 12, "bold"), anchor="w").pack(fill="x", padx=18, pady=(16, 0))
-    g_dict = _keypicker(tk, root, "Dicteren — houd in en spreek", state["hotkey_name"])
-    g_cmd  = _keypicker(tk, root, "Command — selecteer tekst + spreek instructie", state["hotkey_command"])
-    g_tr   = _keypicker(tk, root, "Vertalen — dicteren + meteen vertalen", state["hotkey_translate"])
-    g_tgt = _dropdown(tk, root, "Vertaal-doeltaal", LANG_CHOICES, state["translate_target"])
-    tk.Frame(root, bg=UI_LINE, height=1).pack(fill="x", padx=18, pady=(12, 2))
-    g_lang = _dropdown(tk, root, "Spreektaal", SPOKEN_CHOICES, state["language"])
-    g_eng = _dropdown(tk, root, "Engine", ENGINE_CHOICES, state["engine"])
-    keys = tk.Frame(root, bg=UI_PAPER); keys.pack(fill="x", padx=18, pady=(14, 0))
-    _ghost_btn(tk, keys, "Groq-key…", lambda: set_key_action(None, None)).pack(side="left")
-    _ghost_btn(tk, keys, "Abonnement-sleutel…", lambda: set_license_action(None, None)).pack(side="left", padx=10)
 
-    def _close():
+    root = tk.Tk()
+    root.title("Lazytype")
+    root.configure(bg=UI_PAPER)
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
+    W, H = 500, 500
+    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
+
+    # ── Tabbalk ──────────────────────────────────────────────────────────
+    tab_bar = tk.Frame(root, bg=UI_PAPER)
+    tab_bar.pack(fill="x")
+    tk.Frame(tab_bar, bg=UI_LINE, height=1).pack(side="bottom", fill="x")
+
+    content = tk.Frame(root, bg=UI_PAPER)
+    content.pack(fill="both", expand=True)
+
+    tab_frames = {}
+    tab_btns   = {}
+    active     = {"tab": None}
+
+    def show_tab(name):
+        for f in tab_frames.values():
+            f.pack_forget()
+        tab_frames[name].pack(fill="both", expand=True, padx=0, pady=0)
+        active["tab"] = name
+        for n, b in tab_btns.items():
+            if n == name:
+                b.config(fg=UI_ACCENT, font=("Segoe UI", 10, "bold"),
+                         relief="flat", bd=0, cursor="arrow")
+            else:
+                b.config(fg=UI_SUB, font=UI_FONT,
+                         relief="flat", bd=0, cursor="hand2")
+
+    for tid, tlabel in [("abonnement", "Abonnement"),
+                         ("instellingen", "Instellingen"),
+                         ("over", "Over & Update")]:
+        f = tk.Frame(content, bg=UI_PAPER)
+        tab_frames[tid] = f
+        b = tk.Button(tab_bar, text=tlabel, bg=UI_PAPER, relief="flat", bd=0,
+                      padx=16, pady=10, activebackground=UI_PAPER,
+                      activeforeground=UI_ACCENT,
+                      command=lambda t=tid: show_tab(t))
+        b.pack(side="left")
+        tab_btns[tid] = b
+
+    def section(parent, text):
+        tk.Label(parent, text=text, bg=UI_PAPER, fg=UI_INK,
+                 font=("Segoe UI", 11, "bold"), anchor="w").pack(
+                 fill="x", padx=20, pady=(18, 4))
+
+    def divider(parent):
+        tk.Frame(parent, bg=UI_LINE, height=1).pack(fill="x", padx=20, pady=(10, 2))
+
+    # ── TAB: Abonnement ───────────────────────────────────────────────────
+    ab = tab_frames["abonnement"]
+    section(ab, "Abonnement")
+
+    lst = dictate.license_state()
+    tier_color = {"pro": "#1f9d57", "trial": UI_ACCENT, "personal": "#1f9d57",
+                  "owner": "#1f9d57"}.get(lst["tier"], UI_SUB)
+    tier_dot = "●"
+    tk.Label(ab, text=f"{tier_dot}  {lst['label']}", bg=UI_PAPER,
+             fg=tier_color, font=("Segoe UI", 13, "bold"), anchor="w").pack(
+             fill="x", padx=20, pady=(4, 0))
+
+    if lst["tier"] == "trial" and lst.get("days_left") is not None:
+        tk.Label(ab, text=f"Nog {lst['days_left']} dag{'en' if lst['days_left'] != 1 else ''} resterend",
+                 bg=UI_PAPER, fg=UI_SUB, font=UI_FONT, anchor="w").pack(fill="x", padx=20)
+
+    if not lst["valid"] or lst["tier"] in ("trial",):
+        divider(ab)
+        section(ab, "Upgraden")
+        tk.Label(ab, text="Upgrade naar Personal (eenmalig) of Pro (abonnement)\nvoor onbeperkt gebruik.",
+                 bg=UI_PAPER, fg=UI_SUB, font=UI_FONT, justify="left", anchor="w").pack(
+                 fill="x", padx=20)
+        _accent_btn(tk, ab, "Bekijk abonnementen →",
+                    lambda: __import__("webbrowser").open("https://lazytype.com/#pricing")).pack(
+                    padx=20, pady=(10, 0), anchor="w")
+
+    divider(ab)
+    section(ab, "Licentiesleutel")
+    key_val = os.environ.get("LAZYTYPE_LICENSE", "")
+    key_disp = (key_val[:28] + "…") if len(key_val) > 30 else (key_val or "—")
+    tk.Label(ab, text=key_disp, bg=UI_PAPER, fg=UI_INK,
+             font=UI_MONO, anchor="w").pack(fill="x", padx=20)
+    _ghost_btn(tk, ab, "Sleutel wijzigen…",
+               lambda: set_license_action(None, None)).pack(padx=20, pady=(6, 0), anchor="w")
+
+    if lst["tier"] == "personal":
+        divider(ab)
+        section(ab, "Groq API-key")
+        groq_val = os.environ.get("GROQ_API_KEY", "")
+        groq_disp = (groq_val[:20] + "…") if len(groq_val) > 22 else (groq_val or "—")
+        tk.Label(ab, text=groq_disp, bg=UI_PAPER, fg=UI_INK,
+                 font=UI_MONO, anchor="w").pack(fill="x", padx=20)
+        _ghost_btn(tk, ab, "API-key wijzigen…",
+                   lambda: set_key_action(None, None)).pack(padx=20, pady=(6, 0), anchor="w")
+
+    # ── TAB: Instellingen ─────────────────────────────────────────────────
+    inst = tab_frames["instellingen"]
+
+    scr_frame = tk.Frame(inst, bg=UI_PAPER)
+    scr_frame.pack(fill="both", expand=True)
+
+    section(scr_frame, "Sneltoetsen")
+    g_dict = _keypicker(tk, scr_frame, "Dicteren — houd in en spreek", state["hotkey_name"])
+    g_cmd  = _keypicker(tk, scr_frame, "Command — selecteer tekst + spreek instructie", state["hotkey_command"])
+    g_tr   = _keypicker(tk, scr_frame, "Vertalen — dicteren + meteen vertalen", state["hotkey_translate"])
+    divider(scr_frame)
+    section(scr_frame, "Taal & Engine")
+    g_lang = _dropdown(tk, scr_frame, "Spreektaal", SPOKEN_CHOICES, state["language"])
+    g_tgt  = _dropdown(tk, scr_frame, "Vertaal naar", LANG_CHOICES, state["translate_target"])
+    g_eng  = _dropdown(tk, scr_frame, "Engine", ENGINE_CHOICES, state["engine"])
+
+    def save_settings():
         global _keypicking
         _keypicking = False
         pressed.clear()
-        root.destroy()
-
-    def save():
-        global _keypicking
-        _keypicking = False
-        pressed.clear()
-        state["hotkey_name"] = g_dict(); state["hotkey_command"] = g_cmd()
-        state["hotkey_translate"] = g_tr(); state["translate_target"] = g_tgt()
-        state["language"] = g_lang(); state["engine"] = g_eng()
-        for k, envk in (("hotkey_name", "DICTATE_HOTKEY"), ("hotkey_command", "DICTATE_COMMAND_HOTKEY"),
-                        ("hotkey_translate", "DICTATE_TRANSLATE_HOTKEY"), ("translate_target", "DICTATE_TRANSLATE_TARGET"),
-                        ("language", "DICTATE_LANGUAGE"), ("engine", "DICTATE_ENGINE")):
+        state["hotkey_name"]      = g_dict()
+        state["hotkey_command"]   = g_cmd()
+        state["hotkey_translate"] = g_tr()
+        state["language"]         = g_lang()
+        state["translate_target"] = g_tgt()
+        state["engine"]           = g_eng()
+        for k, envk in (("hotkey_name",      "DICTATE_HOTKEY"),
+                        ("hotkey_command",    "DICTATE_COMMAND_HOTKEY"),
+                        ("hotkey_translate",  "DICTATE_TRANSLATE_HOTKEY"),
+                        ("translate_target",  "DICTATE_TRANSLATE_TARGET"),
+                        ("language",          "DICTATE_LANGUAGE"),
+                        ("engine",            "DICTATE_ENGINE")):
             dictate.save_env_value(envk, state[k])
         rebuild_hotkeys()
         if icon:
-            state["last"] = "Instellingen opgeslagen ✓"; refresh()
+            state["last"] = "Instellingen opgeslagen ✓"
+            refresh()
         root.destroy()
 
-    root.protocol("WM_DELETE_WINDOW", _close)
-    _accent_btn(tk, root, "Opslaan", save).pack(pady=16)
+    btn_bar = tk.Frame(scr_frame, bg=UI_PAPER)
+    btn_bar.pack(fill="x", padx=20, pady=16)
+    _accent_btn(tk, btn_bar, "Opslaan", save_settings).pack(side="right")
+    _ghost_btn(tk, btn_bar, "Annuleren", root.destroy).pack(side="right", padx=(0, 8))
+
+    # ── TAB: Over & Update ────────────────────────────────────────────────
+    ov = tab_frames["over"]
+    section(ov, "Over Lazytype")
+    tk.Label(ov, text=f"Versie {APP_VERSION}", bg=UI_PAPER, fg=UI_INK,
+             font=("Segoe UI", 12, "bold"), anchor="w").pack(fill="x", padx=20)
+    tk.Label(ov, text="Dicteersoftware voor Windows en macOS",
+             bg=UI_PAPER, fg=UI_SUB, font=UI_FONT, anchor="w").pack(fill="x", padx=20)
+
+    divider(ov)
+    section(ov, "Update")
+    upd_var = tk.StringVar()
+    upd_lbl = tk.Label(ov, textvariable=upd_var, bg=UI_PAPER, fg=UI_SUB,
+                       font=UI_FONT, anchor="w")
+    upd_lbl.pack(fill="x", padx=20)
+    upd_btn_frame = tk.Frame(ov, bg=UI_PAPER)
+    upd_btn_frame.pack(fill="x", padx=20, pady=(8, 0))
+
+    def check_now():
+        upd_var.set("Controleren…")
+        root.update()
+        try:
+            import requests
+            r = requests.get("https://lazytype.com/version.json", timeout=8)
+            latest = r.json().get("version", "")
+            if latest and latest != APP_VERSION:
+                upd_var.set(f"Nieuwe versie beschikbaar: v{latest}")
+                upd_lbl.config(fg="#1f9d57")
+                if IS_WIN and getattr(sys, "frozen", False):
+                    _accent_btn(tk, upd_btn_frame, f"Installeer v{latest}",
+                                lambda v=latest: _install_update(v, root)).pack(side="left")
+                else:
+                    _ghost_btn(tk, upd_btn_frame, "Download →",
+                               lambda: __import__("webbrowser").open("https://lazytype.com")).pack(side="left")
+            else:
+                upd_var.set("Je hebt de nieuwste versie.")
+        except Exception:
+            upd_var.set("Kan niet controleren — check je internetverbinding.")
+
+    if _update_info:
+        upd_var.set(f"Nieuwe versie beschikbaar: v{_update_info}")
+        upd_lbl.config(fg="#1f9d57")
+        if IS_WIN and getattr(sys, "frozen", False):
+            _accent_btn(tk, upd_btn_frame, f"Installeer v{_update_info}",
+                        lambda v=_update_info: _install_update(v, root)).pack(side="left")
+        else:
+            _ghost_btn(tk, upd_btn_frame, "Download →",
+                       lambda: __import__("webbrowser").open("https://lazytype.com")).pack(side="left")
+    else:
+        upd_var.set("Je hebt de nieuwste versie.")
+        _ghost_btn(tk, upd_btn_frame, "Controleer op updates",
+                   lambda: threading.Thread(target=check_now, daemon=True).start()).pack(side="left")
+
+    divider(ov)
+    tk.Label(ov, text="© Lazytype — lazytype.com",
+             bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9), anchor="w").pack(
+             fill="x", padx=20, pady=(8, 0))
+    _ghost_btn(tk, ov, "Website openen",
+               lambda: __import__("webbrowser").open("https://lazytype.com")).pack(
+               padx=20, pady=(4, 0), anchor="w")
+
+    # ── Afsluiten ─────────────────────────────────────────────────────────
+    def on_close():
+        global _keypicking
+        _keypicking = False
+        pressed.clear()
+        root.destroy()
+
+    root.protocol("WM_DELETE_WINDOW", on_close)
+    show_tab(start_tab)
     root.mainloop()
+
+
+def _install_update(new_version: str, parent_window=None):
+    """Download nieuwe exe en vervang na afsluiten (alleen Windows, frozen)."""
+    import urllib.request, tempfile
+    try:
+        tmp = Path(tempfile.gettempdir()) / "Lazytype_update.exe"
+        urllib.request.urlretrieve("https://lazytype.com/downloads/Lazytype.exe", tmp)
+        exe = Path(sys.executable)
+        bat = Path(tempfile.gettempdir()) / "lazytype_update.bat"
+        bat.write_text(
+            f"@echo off\r\ntimeout /t 2 /nobreak >nul\r\n"
+            f"copy /y \"{tmp}\" \"{exe}\"\r\n"
+            f"start \"\" \"{exe}\"\r\ndel \"%~f0\"\r\n",
+            encoding="utf-8")
+        import subprocess
+        subprocess.Popen(["cmd", "/c", str(bat)], creationflags=0x08000000)
+        if parent_window:
+            parent_window.destroy()
+        if icon:
+            icon.stop()
+        sys.exit(0)
+    except Exception as e:
+        import tkinter.messagebox as mb
+        mb.showerror("Update mislukt", str(e))
+
+
+def _run_settings_window():
+    """Achterwaartse compatibiliteit: opent het dashboard op de instellingen-tab."""
+    open_dashboard("instellingen")
 
 
 def _reload_from_env():
@@ -1019,7 +1222,8 @@ def run_onboarding():
     W, H = 460, 440
     root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
     body = tk.Frame(root, bg=UI_PAPER); body.pack(fill="both", expand=True)
-    sel = {"d": state["hotkey_name"], "t": state["hotkey_translate"], "g": state["translate_target"]}
+    sel = {"d": state["hotkey_name"], "t": state["hotkey_translate"],
+           "g": state["translate_target"], "l": state["language"]}
 
     def clear():
         for w in body.winfo_children():
@@ -1040,7 +1244,7 @@ def run_onboarding():
     def s0():
         clear(); head("Welkom bij Lazytype",
                       "Houd een toets ingedrukt, spreek, en je woorden verschijnen — in elke app. "
-                      "Even 2 dingen instellen, dan kun je los.")
+                      "Even een paar dingen instellen, dan kun je los.")
         nav(None, "Beginnen →", s1)
 
     def s1():
@@ -1048,7 +1252,14 @@ def run_onboarding():
                       "Houd deze toets ingedrukt terwijl je spreekt; laat los om te stoppen. "
                       "Klik 'Wijzig…' en druk dan de gewenste toets(combo).")
         g = _keypicker(tk, body, "Dicteren", sel["d"])
-        nav(s0, "Volgende →", lambda: (sel.update(d=g()), s2()))
+        nav(s0, "Volgende →", lambda: (sel.update(d=g()), s_lang()))
+
+    def s_lang():
+        clear(); head("Welke taal spreek je?",
+                      "Lazytype herkent je stem beter als het weet in welke taal je dicteert. "
+                      "Je kunt dit later aanpassen via Instellingen.")
+        g = _dropdown(tk, body, "Spreektaal", SPOKEN_CHOICES, sel["l"])
+        nav(s1, "Volgende →", lambda: (sel.update(l=g()), s2()))
 
     def s2():
         clear(); head("Vertaal-toets",
@@ -1056,7 +1267,7 @@ def run_onboarding():
                       "krijg Engels. Of spreek Engels, krijg Duits.")
         g1 = _keypicker(tk, body, "Vertaal-toets", sel["t"])
         g2 = _dropdown(tk, body, "Vertaal naar", LANG_CHOICES, sel["g"])
-        nav(s1, "Volgende →", lambda: (sel.update(t=g1(), g=g2()), s3()))
+        nav(s_lang, "Volgende →", lambda: (sel.update(t=g1(), g=g2()), s3()))
 
     def s3():
         clear()
@@ -1095,9 +1306,11 @@ def run_onboarding():
             state["hotkey_name"] = sel["d"]
             state["hotkey_translate"] = sel["t"]
             state["translate_target"] = sel["g"]
+            state["language"] = sel["l"]
             for k, envk in (("hotkey_name", "DICTATE_HOTKEY"),
                             ("hotkey_translate", "DICTATE_TRANSLATE_HOTKEY"),
-                            ("translate_target", "DICTATE_TRANSLATE_TARGET")):
+                            ("translate_target", "DICTATE_TRANSLATE_TARGET"),
+                            ("language", "DICTATE_LANGUAGE")):
                 dictate.save_env_value(envk, state[k])
             dictate.save_env_value("DICTATE_ONBOARDED", "1")
             rebuild_hotkeys()

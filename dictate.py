@@ -41,9 +41,18 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-# Als 'frozen' (PyInstaller .exe) staat .env naast de exe, niet in de temp-map.
+# Persistente opslag: AppData op Windows, ~/.config/Lazytype op macOS.
+# Bij frozen exe: migreer .env naast de exe naar AppData als die al bestaat.
 if getattr(sys, "frozen", False):
-    ROOT = Path(sys.executable).resolve().parent
+    if IS_WIN:
+        ROOT = Path(os.environ.get("APPDATA", Path.home())).expanduser() / "Lazytype"
+    else:
+        ROOT = Path.home() / ".config" / "Lazytype"
+    ROOT.mkdir(parents=True, exist_ok=True)
+    _old_env = Path(sys.executable).resolve().parent / ".env"
+    if _old_env.exists() and not (ROOT / ".env").exists():
+        import shutil as _shutil
+        _shutil.copy2(_old_env, ROOT / ".env")
 else:
     ROOT = Path(__file__).resolve().parent
 
@@ -160,18 +169,37 @@ def _trial_file() -> Path:
 
 
 def _trial_start():
+    """Geeft de vroegste bekende starttijd terug (Registry + bestand — beide moeten verwijderd worden)."""
+    timestamps = []
+    if IS_WIN:
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Lazytype") as k:
+                val, _ = winreg.QueryValueEx(k, "TrialStart")
+                timestamps.append(float(val))
+        except Exception:
+            pass
     try:
-        return float(_trial_file().read_text(encoding="utf-8").strip())
+        timestamps.append(float(_trial_file().read_text(encoding="utf-8").strip()))
     except Exception:
-        return None
+        pass
+    return min(timestamps) if timestamps else None
 
 
 def start_trial_if_needed():
     if _trial_start() is None:
+        ts = str(int(time.time()))
+        if IS_WIN:
+            try:
+                import winreg
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Lazytype") as k:
+                    winreg.SetValueEx(k, "TrialStart", 0, winreg.REG_SZ, ts)
+            except Exception:
+                pass
         try:
             f = _trial_file()
             f.parent.mkdir(parents=True, exist_ok=True)
-            f.write_text(str(int(time.time())), encoding="utf-8")
+            f.write_text(ts, encoding="utf-8")
         except Exception:
             pass
 
@@ -188,9 +216,33 @@ def trial_days_left() -> int:
 
 _license_server_ok = None  # None=ongecontroleerd, True=ok, False=afgewezen door server
 
+
+def _verify_cache_ok(key: str) -> bool:
+    """True als er een recente (<7 dagen) server-verificatie gecached is voor deze sleutel."""
+    try:
+        import hashlib
+        kh = hashlib.sha256(key.encode()).hexdigest()[:16]
+        parts = (_config_dir() / "verify_cache").read_text(encoding="utf-8").strip().split(":")
+        return len(parts) == 2 and parts[0] == kh and time.time() - float(parts[1]) < 7 * 86400
+    except Exception:
+        return False
+
+
+def _verify_cache_save(key: str):
+    try:
+        import hashlib
+        kh = hashlib.sha256(key.encode()).hexdigest()[:16]
+        f = _config_dir() / "verify_cache"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(f"{kh}:{int(time.time())}", encoding="utf-8")
+    except Exception:
+        pass
+
+
 def verify_personal_key():
-    """Achtergrond: HMAC-verificeer Personal/Pro-sleutel bij de server (verify.php).
-    Zo is de lokale decode-zonder-HMAC-check (honor-system) niet de enige barrière."""
+    """Achtergrond: HMAC-verificeer + device-binding bij de server (verify.php).
+    Bij netwerk fout: vertrouw cache als die ≤7 dagen oud is (offline-vriendelijk).
+    Bij expliciete afwijzing (verkeerd device, verlopen): cache wissen + blokkeren."""
     global _license_server_ok
     key = (os.environ.get("LAZYTYPE_LICENSE") or LICENSE).strip()
     if not key:
@@ -201,10 +253,21 @@ def verify_personal_key():
     try:
         import requests
         base = API_URL.rsplit("/", 1)[0]
-        r = requests.post(f"{base}/verify.php", data={"license": key}, timeout=10)
-        _license_server_ok = r.status_code == 200 and bool(r.json().get("ok"))
+        r = requests.post(f"{base}/verify.php", data={
+            "license": key,
+            "device":  ensure_device_id(),
+        }, timeout=10)
+        ok = r.status_code == 200 and bool(r.json().get("ok"))
+        _license_server_ok = ok
+        if ok:
+            _verify_cache_save(key)
+        else:
+            try:
+                (_config_dir() / "verify_cache").unlink()
+            except Exception:
+                pass
     except Exception:
-        _license_server_ok = True  # netwerk fout → fail-open, vertrouw lokale check
+        _license_server_ok = _verify_cache_ok(key)
 
 
 def license_payload():
@@ -225,9 +288,6 @@ def license_state() -> dict:
     """Effectieve toegang: {tier, valid, managed, days_left, label}.
     Owner (geheim aanwezig) = onbeperkt. Geldige Personal/Pro-sleutel telt; anders
     een lokale 14-daagse proef (BYOK), daarna geblokkeerd tot aankoop."""
-    if os.environ.get("LAZYTYPE_LICENSE_SECRET"):
-        return {"tier": "owner", "valid": True, "managed": True,
-                "days_left": None, "label": "Owner (onbeperkt)"}
     p = license_payload()
     if p and p.get("tier") in ("personal", "pro", "trial"):
         exp = int(p.get("exp", 0) or 0)

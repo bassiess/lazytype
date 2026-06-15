@@ -58,6 +58,37 @@ if (!in_array($tier, ['trial', 'pro'], true)) {
     exit;
 }
 
+// ── Device binding check ──────────────────────────────────────────────────
+$device = trim($_POST['device'] ?? '');
+if ($device) {
+    require_once __DIR__ . '/db.php';
+    try {
+        init_db();
+        $db = get_db();
+        if ($tier === 'trial') {
+            $stmt = $db->prepare("SELECT device FROM trials WHERE license_key = ? LIMIT 1");
+            $stmt->execute([$license]);
+            $row = $stmt->fetch();
+            if ($row !== false && $row['device'] && $row['device'] !== $device) {
+                http_response_code(403);
+                echo json_encode(['error' => 'Sleutel al in gebruik op een ander apparaat']);
+                exit;
+            }
+        } else {
+            $stmt = $db->prepare("SELECT device_id FROM purchases WHERE license_key = ? LIMIT 1");
+            $stmt->execute([$license]);
+            $row = $stmt->fetch();
+            if ($row !== false && $row['device_id'] && $row['device_id'] !== $device) {
+                http_response_code(403);
+                echo json_encode(['error' => 'Sleutel al geactiveerd op een ander apparaat']);
+                exit;
+            }
+        }
+    } catch (\Exception $e) {
+        // DB-fout: transcriptie doorzetten zonder device check
+    }
+}
+
 // ── Audio ontvangen ───────────────────────────────────────────────────────
 if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
     http_response_code(400);
