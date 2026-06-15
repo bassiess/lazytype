@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -1501,7 +1501,6 @@ def run_onboarding():
         global _keypicking
         _keypicking = False
         pressed.clear()
-        dictate.save_env_value("DICTATE_ONBOARDED", "1")
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", skip)
@@ -1865,8 +1864,8 @@ def main():
         except Exception as e:
             print(f"  (onboarding overgeslagen: {e})")
 
-    # Eerste keer zonder key? Vraag hem meteen (op de main thread, vóór de tray-loop).
-    if state["engine"] == "groq" and not os.environ.get("GROQ_API_KEY"):
+    # Groq-key vragen alleen als de gebruiker groq expliciet heeft gekozen (niet standaard bij eerste start).
+    if state["engine"] == "groq" and not os.environ.get("GROQ_API_KEY") and os.environ.get("DICTATE_ENGINE"):
         try:
             key = ask_groq_key()
             if key:
