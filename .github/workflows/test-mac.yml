@@ -1,6 +1,7 @@
 name: Test macOS
 
 on:
+  workflow_dispatch:
   push:
     branches: [master]
   pull_request:
@@ -23,3 +24,63 @@ jobs:
         run: |
           python dictate_tray.py --selftest
           echo "Selftest geslaagd"
+
+      - name: Mac-runtime test (platform-specifieke code-paden)
+        run: |
+          python - <<'PYEOF'
+          import sys
+          import dictate, license as lic
+
+          fails = []
+          def check(name, cond, detail=""):
+              print(("[PASS] " if cond else "[FAIL] ") + name + ("  " + detail if detail else ""))
+              if not cond:
+                  fails.append(name)
+
+          # Platformdetectie
+          check("IS_MAC is True", dictate.IS_MAC)
+          check("IS_WIN is False", not dictate.IS_WIN)
+
+          # Stabiele hardware-id via ioreg (IOPlatformUUID)
+          hid = dictate._hardware_id()
+          check("_hardware_id() = 16 hex", isinstance(hid, str) and len(hid) == 16, "-> " + str(hid))
+          check("_hardware_id() stabiel (2x gelijk)", bool(hid) and hid == dictate._hardware_id())
+
+          # Device-id leidt af van hardware-id
+          did = dictate.ensure_device_id()
+          check("ensure_device_id() == hardware_id", did == hid and bool(hid), "-> " + str(did))
+
+          # Licentie decoderen + tiers
+          testkey = "LZT.eyJpZCI6IjV6eGdJZTdhIiwiZW1haWwiOiJiYXNAbmllc2UubnUiLCJ0aWVyIjoidHJpYWwiLCJpYXQiOjE3ODE1MjY3ODMsImV4cCI6MTc4MjczNjM4M30.r2AoLOq-AklYVyLzajUjWERQv9w_jjwtN3gIEHg8Q_A"
+          p = lic.decode(testkey)
+          check("license.decode() tier=trial", bool(p) and p.get("tier") == "trial", "-> " + str(p.get("tier") if p else None))
+          check("lifetime in license.TIERS", "lifetime" in lic.TIERS)
+
+          # Toon-generatie (beep-bron)
+          pcm = dictate._make_tone_pcm(880, 120)
+          wav = dictate._pcm_to_wav(pcm)
+          check("_make_tone_pcm() niet leeg", len(pcm) > 1000)
+          check("_pcm_to_wav() geldige WAV-header", wav[:4] == b"RIFF" and wav[8:12] == b"WAVE")
+
+          # beep() op Mac (afplay) mag NIET crashen
+          try:
+              dictate.beep("start"); dictate.beep("stop"); dictate.beep("done"); dictate.beep("error")
+              check("beep() draait zonder exception", True)
+          except Exception as e:
+              check("beep() draait zonder exception", False, str(e))
+
+          # Mac-standaard sneltoetsen
+          check("default dicteer-hotkey = ctrl_r", dictate._DEFAULT_HOTKEY == "ctrl_r", "-> " + str(dictate._DEFAULT_HOTKEY))
+          check("default vertaal-hotkey = alt_r", dictate._DEFAULT_TRANSLATE_HOTKEY == "alt_r", "-> " + str(dictate._DEFAULT_TRANSLATE_HOTKEY))
+
+          # paste_text aanwezig (Mac-tak gebruikt Cmd+V)
+          check("paste_text() gedefinieerd", callable(dictate.paste_text))
+
+          # Opschonen is de nieuwe default
+          check("POSTPROCESS default = clean", dictate.POSTPROCESS == "clean", "-> " + str(dictate.POSTPROCESS))
+
+          if fails:
+              print("\n" + str(len(fails)) + " CHECK(S) GEFAALD: " + str(fails))
+              sys.exit(1)
+          print("\nAlle Mac-runtime checks geslaagd op echte macOS.")
+          PYEOF
