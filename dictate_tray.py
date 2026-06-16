@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.1.8"
+APP_VERSION = "1.1.9"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -1366,7 +1366,20 @@ def _install_update(new_version: str, parent_window=None):
             overlay_ui.stop()
         except Exception:
             pass
-        os._exit(0)   # direct uit: geeft lock vrij + geen blokkerende _MEI-waarschuwing
+        # NETTE afsluiting i.p.v. os._exit(0): de icon.stop() hierboven laat de
+        # hoofd-thread main() normaal afronden, waarna de PyInstaller-bootloader zijn
+        # EIGEN _MEI-map opruimt. Dat voorkomt de "Failed to load Python DLL"-race die
+        # bij os._exit optrad (de bootloader-parent ruimde _MEI op terwijl het proces
+        # nog niet netjes weg was). De copy-stap in de bat wacht op de exe-lock, dus die
+        # gaat pas door zodra dit proces écht volledig is afgesloten.
+        # Watchdog: mocht de nette afsluiting onverhoopt blijven hangen, forceer dan
+        # alsnog exit zodat de update niet vastloopt.
+        def _force_exit():
+            import time as _t
+            _t.sleep(6)
+            os._exit(0)
+        threading.Thread(target=_force_exit, daemon=True).start()
+        return
     except Exception as e:
         import tkinter.messagebox as mb
         mb.showerror("Update mislukt", str(e))
