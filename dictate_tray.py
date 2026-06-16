@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.1.5"
+APP_VERSION = "1.1.7"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -537,6 +537,7 @@ def choose_language(code):
 def choose_postprocess(mode):
     def action(icon_, item):
         state["postprocess"] = mode
+        dictate.save_env_value("DICTATE_POSTPROCESS", mode)  # bewaar keuze (bleef voorheen niet behouden)
         refresh()
     return action
 
@@ -1292,12 +1293,22 @@ def _install_update(new_version: str, parent_window=None):
       daemon-thread → beëindigde het proces niet).
     • De bat ruimt achtergebleven _MEI-mappen op vóór de herstart.
     """
-    import urllib.request, tempfile, subprocess
+    import urllib.request, tempfile, subprocess, hashlib
     try:
         tmp = Path(tempfile.gettempdir()) / "Lazytype_update.exe"
         urllib.request.urlretrieve("https://lazytype.com/downloads/Lazytype.exe", tmp)
         if not tmp.exists() or tmp.stat().st_size < 1_000_000:
             raise RuntimeError("Download onvolledig of mislukt — probeer het opnieuw.")
+        # Verificeer SHA256-hash van de gedownloade exe
+        with urllib.request.urlopen("https://lazytype.com/downloads/sha256.txt", timeout=10) as r:
+            expected_hash = r.read().decode().strip().split()[0].lower()
+        h = hashlib.sha256()
+        with open(tmp, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        if h.hexdigest() != expected_hash:
+            tmp.unlink(missing_ok=True)
+            raise RuntimeError("Verificatie mislukt — download beschadigd of gemanipuleerd. Probeer opnieuw.")
         exe = Path(sys.executable)
         bat = Path(tempfile.gettempdir()) / "lazytype_update.bat"
         bat.write_text(

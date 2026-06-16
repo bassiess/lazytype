@@ -115,6 +115,28 @@ if ($device) {
     }
 }
 
+// ── Rate limiting (trial: max 60/uur per sleutel) ─────────────────────────
+if ($tier === 'trial') {
+    if (!isset($db)) {
+        require_once __DIR__ . '/db.php';
+        init_db();
+        $db = get_db();
+    }
+    $key_hash = hash('sha256', $license);
+    try {
+        $cnt = $db->prepare("SELECT COUNT(*) FROM rate_limits WHERE key_hash = ? AND endpoint = 'transcribe' AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+        $cnt->execute([$key_hash]);
+        if ((int)$cnt->fetchColumn() >= 60) {
+            http_response_code(429);
+            echo json_encode(['error' => 'Te veel verzoeken — maximaal 60 transcripties per uur voor de proefversie. Upgrade op lazytype.com.']);
+            exit;
+        }
+        $db->prepare("INSERT INTO rate_limits (key_hash, endpoint) VALUES (?, 'transcribe')")->execute([$key_hash]);
+    } catch (\Exception $e) {
+        // DB-fout: transcriptie doorzetten zonder rate check
+    }
+}
+
 // ── Audio ontvangen ───────────────────────────────────────────────────────
 if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
     http_response_code(400);

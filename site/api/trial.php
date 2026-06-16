@@ -50,23 +50,43 @@ try {
         exit;
     }
 
-    // Geef bestaande niet-verlopen sleutel terug
-    $stmt = $db->prepare("SELECT license_key FROM trials WHERE email = ? AND expires_at > NOW() LIMIT 1");
+    // Eén gratis proef per e-mailadres — OOIT. Bestaat er al een proef voor dit adres?
+    $stmt = $db->prepare("SELECT license_key, expires_at FROM trials WHERE email = ? LIMIT 1");
     $stmt->execute([$email]);
     $row = $stmt->fetch();
     if ($row) {
-        echo json_encode(['ok' => true, 'key' => $row['license_key']]);
+        if (strtotime($row['expires_at']) > time()) {
+            // Nog geldig → geef dezelfde sleutel terug (herstel na herinstallatie)
+            echo json_encode(['ok' => true, 'key' => $row['license_key']]);
+        } else {
+            // Verlopen → GEEN nieuwe proef (anti-misbruik: niet eindeloos te herhalen)
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Dit e-mailadres heeft de gratis proefperiode al gebruikt. Upgrade op lazytype.com om door te gaan.']);
+        }
         exit;
     }
 
-    $key = make_trial_key($email);
-    $db->prepare("
-        INSERT INTO trials (email, device, license_key, expires_at)
-        VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 14 DAY))
-        ON DUPLICATE KEY UPDATE license_key = VALUES(license_key), expires_at = VALUES(expires_at), device = VALUES(device)
-    ")->execute([$email, $device, $key]);
+    // ── Rate limiting: max 3 nieuwe trials per IP per dag ────────────────────
+    $ip_hash = hash('sha256', $_SERVER['REMOTE_ADDR'] ?? '');
+    $ip_cnt  = $db->prepare("SELECT COUNT(*) FROM rate_limits WHERE key_hash = ? AND endpoint = 'trial' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+    $ip_cnt->execute([$ip_hash]);
+    if ((int)$ip_cnt->fetchColumn() >= 3) {
+        http_response_code(429);
+        echo json_encode(['ok' => false, 'error' => 'Te veel aanvragen van dit IP-adres. Probeer morgen opnieuw.']);
+        exit;
+    }
+    $db->prepare("INSERT INTO rate_limits (key_hash, endpoint) VALUES (?, 'trial')")->execute([$ip_hash]);
 
-    // Bevestigingsmail
+    $key = make_trial_key($email);
+    // Plain INSERT: nooit een bestaande proef overschrijven/verlengen (anti-misbruik).
+    // De bestaande-proef-tak hierboven heeft dat al afgehandeld.
+    $db->prepare("INSERT INTO trials (email, device, license_key, expires_at)
+                  VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 14 DAY))")
+       ->execute([$email, $device, $key]);
+
+    // Bevestigingsmail — verbeterde headers (Message-ID, Date, envelope-sender)
+    // voor betere aflevering. NB: zonder SPF/DKIM in de DNS belandt mail snel in
+    // spam; zie de notitie in de deploy. mail_sent geeft de PHP-status terug.
     $subject = 'Je Lazytype-proefsleutel (14 dagen gratis)';
     $msg = implode("\r\n", [
         "Hallo,",
@@ -83,10 +103,19 @@ try {
         "Succes met dicteren!",
         "Team Lazytype",
     ]);
-    $headers = "From: " . MAIL_FROM_NAME . " <" . MAIL_FROM . ">\r\nContent-Type: text/plain; charset=UTF-8";
-    @mail($email, $subject, $msg, $headers);
+    $headers = implode("\r\n", [
+        'From: ' . MAIL_FROM_NAME . ' <' . MAIL_FROM . '>',
+        'Reply-To: ' . MAIL_FROM,
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+        'X-Mailer: Lazytype',
+        'Message-ID: <' . bin2hex(random_bytes(8)) . '@lazytype.com>',
+        'Date: ' . date(DATE_RFC2822),
+    ]);
+    $mail_sent = @mail($email, $subject, $msg, $headers, '-f' . MAIL_FROM);
 
-    echo json_encode(['ok' => true, 'key' => $key]);
+    echo json_encode(['ok' => true, 'key' => $key, 'mail_sent' => (bool)$mail_sent]);
 
 } catch (Exception $e) {
     http_response_code(500);

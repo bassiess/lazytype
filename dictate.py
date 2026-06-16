@@ -103,7 +103,8 @@ OPENAI_MODEL = os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe")
 # LLM-nabewerking (opschonen / vertalen) via Groq chat-completions.
 GROQ_CHAT_MODEL = os.environ.get("GROQ_CLEANUP_MODEL", "llama-3.3-70b-versatile")
 # "off" = uit · "clean" = opschonen in dezelfde taal · taalcode (en/nl/de/…) = vertalen + opschonen
-POSTPROCESS = os.environ.get("DICTATE_POSTPROCESS", "off").lower()
+# Standaard "clean": dictaat wordt opgeschoond (haperingen/«eh» weg, interpunctie net).
+POSTPROCESS = os.environ.get("DICTATE_POSTPROCESS", "clean").lower()
 
 # Managed abonnement: transcriptie loopt via de Lazytype-proxy (server houdt de
 # Groq-key server-side). Vereist een geldige licentiesleutel (LAZYTYPE_LICENSE).
@@ -456,10 +457,46 @@ def transcribe_local(wav_bytes: bytes, language: str) -> str:
     return (r.json().get("text") or "").strip()
 
 
+def _hardware_id() -> str:
+    """Stabiele, anonieme machine-id afgeleid van hardware/OS — gelijk ná een
+    herinstallatie. Voorkomt dat elke herinstallatie een NIEUW device-slot verbruikt
+    (de oude os.urandom-aanpak putte de 2-apparaten-limiet uit). Lege string als het
+    niet lukt → dan valt ensure_device_id terug op een willekeurige id."""
+    raw = ""
+    try:
+        if IS_WIN:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                r"SOFTWARE\Microsoft\Cryptography") as k:
+                raw, _ = winreg.QueryValueEx(k, "MachineGuid")
+        elif IS_MAC:
+            out = subprocess.check_output(
+                ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"], text=True)
+            m = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', out)
+            raw = m.group(1) if m else ""
+    except Exception:
+        raw = ""
+    if not raw:
+        return ""
+    import hashlib
+    return hashlib.sha256(("lazytype:" + raw.strip()).encode()).hexdigest()[:16]
+
+
 def ensure_device_id() -> str:
-    """Stabiele, anonieme device-id per installatie (voor device-binding van een
-    abonnement). Eenmalig gegenereerd en in .env bewaard."""
+    """Stabiele, anonieme device-id voor device-binding. Bij voorkeur afgeleid van
+    de hardware (overleeft herinstallaties); anders eenmalig willekeurig."""
     did = os.environ.get("LAZYTYPE_DEVICE", "").strip()
+    stable = _hardware_id()
+    if stable:
+        # Migreer bestaande (willekeurige) id's naar de stabiele hardware-id, zodat
+        # een herinstallatie hetzelfde slot hergebruikt i.p.v. een nieuw te claimen.
+        if did != stable:
+            try:
+                save_env_value("LAZYTYPE_DEVICE", stable)
+            except Exception:
+                pass
+            os.environ["LAZYTYPE_DEVICE"] = stable
+        return stable
     if not did:
         did = os.urandom(8).hex()
         try:

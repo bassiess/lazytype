@@ -47,10 +47,18 @@ function init_db(): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
     // Migreer purchases: license_key verbreden + 2 device-slots + lifetime plan
+    // Een HMAC-licentiesleutel is veel langer dan 64 tekens. De oorspronkelijke
+    // VARCHAR(64) UNIQUE-index kan een MODIFY naar VARCHAR(400) blokkeren (utf8mb4
+    // index-limiet) → sleutel zou stil afgekapt worden. Daarom eerst de unique-index
+    // vervangen door een prefix-index, dán de kolom verbreden.
+    try { $db->exec("ALTER TABLE purchases DROP INDEX license_key"); } catch (\Exception $e) {}
     try { $db->exec("ALTER TABLE purchases MODIFY license_key VARCHAR(400)"); } catch (\Exception $e) {}
+    try { $db->exec("ALTER TABLE purchases ADD UNIQUE KEY uq_license (license_key(191))"); } catch (\Exception $e) {}
     try { $db->exec("ALTER TABLE purchases MODIFY plan ENUM('personal','pro','lifetime') NOT NULL"); } catch (\Exception $e) {}
     try { $db->exec("ALTER TABLE purchases ADD COLUMN device_id  VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
     try { $db->exec("ALTER TABLE purchases ADD COLUMN device_id_2 VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
+    // Payment-intent opslaan zodat charge.refunded de juiste aankoop kan matchen.
+    try { $db->exec("ALTER TABLE purchases ADD COLUMN stripe_payment_intent VARCHAR(255) DEFAULT NULL"); } catch (\Exception $e) {}
     // Migreer trials: 2 device-slots + reminded_at
     try { $db->exec("ALTER TABLE trials ADD COLUMN device_2    VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
     try { $db->exec("ALTER TABLE trials ADD COLUMN reminded_at DATETIME    DEFAULT NULL"); } catch (\Exception $e) {}
@@ -81,6 +89,19 @@ function init_db(): void {
             INDEX idx_source (utm_source)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS rate_limits (
+            id         INT AUTO_INCREMENT PRIMARY KEY,
+            key_hash   VARCHAR(64) NOT NULL,
+            endpoint   VARCHAR(32) NOT NULL DEFAULT 'transcribe',
+            created_at DATETIME    DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_key_time (key_hash, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    // Purge verlopen entries (~1% kans per aanroep)
+    if (rand(1, 100) === 1) {
+        $db->exec("DELETE FROM rate_limits WHERE created_at < DATE_SUB(NOW(), INTERVAL 48 HOUR)");
+    }
 }
 
 function generate_key(): string {

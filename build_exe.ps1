@@ -30,4 +30,10 @@ if ($env:LAZYTYPE_PFX -and (Test-Path $env:LAZYTYPE_PFX)) {
 New-Item -ItemType Directory -Force "site\downloads" | Out-Null
 Copy-Item "dist\Lazytype.exe" "site\downloads\Lazytype.exe" -Force
 $mb = [math]::Round((Get-Item "dist\Lazytype.exe").Length/1MB,1)
+
+# SHA256-hash genereren naast de exe (wordt gedownload door de updater ter verificatie)
+$hash = (Get-FileHash "site\downloads\Lazytype.exe" -Algorithm SHA256).Hash.ToLower()
+"$hash  Lazytype.exe" | Out-File -Encoding ascii "site\downloads\sha256.txt"
+Write-Host "SHA256: $hash" -ForegroundColor DarkGray
+
 Write-Host "Klaar: dist\Lazytype.exe ($mb MB) -> ook in site\downloads\" -ForegroundColor Green

@@ -32,6 +32,7 @@ TIERS = {
     "trial":    {"name": "Proef (14d)", "managed": True},   # proefsleutel, server-managed
     "personal": {"name": "Personal",   "managed": False},   # eenmalig, eigen Groq-key
     "pro":      {"name": "Pro",        "managed": True},    # abonnement, wij hosten
+    "lifetime": {"name": "Lifetime",   "managed": True},    # eenmalig, server-managed (geen vervaldatum)
 }
 
 

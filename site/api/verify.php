@@ -12,7 +12,9 @@ require_once __DIR__ . '/config.php';
 header('Content-Type: application/json');
 
 function b64d(string $s): string {
-    return base64_decode(str_replace(['-', '_'], ['+', '/'], $s) . str_repeat('=', (-strlen($s)) % 4));
+    $pad = strlen($s) % 4;
+    if ($pad) { $s .= str_repeat('=', 4 - $pad); }
+    return base64_decode(strtr($s, '-_', '+/'));
 }
 function b64e_raw(string $bytes): string {
     return rtrim(strtr(base64_encode($bytes), '+/', '-_'), '=');
