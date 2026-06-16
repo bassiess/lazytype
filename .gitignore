@@ -30,3 +30,4 @@ _tmp_*
 # Persoonlijke gebruikersinhoud (woordenboek/snippets kunnen privégegevens bevatten)
 dictionary.txt
 snippets.txt
+site/downloads/sha256.txt

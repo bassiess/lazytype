@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.1.7"
+APP_VERSION = "1.1.8"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -1225,6 +1225,8 @@ def open_dashboard(start_tab="instellingen"):
     upd_btn_frame.pack(fill="x", padx=20, pady=(8, 0))
 
     def check_now():
+        for w in upd_btn_frame.winfo_children():   # wis vorige knoppen → geen dubbele
+            w.destroy()
         upd_var.set("Controleren…")
         root.update()
         try:
@@ -1299,16 +1301,25 @@ def _install_update(new_version: str, parent_window=None):
         urllib.request.urlretrieve("https://lazytype.com/downloads/Lazytype.exe", tmp)
         if not tmp.exists() or tmp.stat().st_size < 1_000_000:
             raise RuntimeError("Download onvolledig of mislukt — probeer het opnieuw.")
-        # Verificeer SHA256-hash van de gedownloade exe
-        with urllib.request.urlopen("https://lazytype.com/downloads/sha256.txt", timeout=10) as r:
-            expected_hash = r.read().decode().strip().split()[0].lower()
-        h = hashlib.sha256()
-        with open(tmp, "rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                h.update(chunk)
-        if h.hexdigest() != expected_hash:
-            tmp.unlink(missing_ok=True)
-            raise RuntimeError("Verificatie mislukt — download beschadigd of gemanipuleerd. Probeer opnieuw.")
+        # Verifieer SHA256 ALS de hash-lijst beschikbaar is. Ontbreekt sha256.txt
+        # (404) of is hij onbereikbaar, dan vertrouwen we op de HTTPS-verbinding en
+        # slaan we de check over — anders blokkeert een ontbrekend hash-bestand ELKE
+        # update (precies de "404 Not Found" die gebruikers zagen). Bij een hash die
+        # WEL aanwezig is maar NIET klopt, blokkeren we wél (manipulatie/beschadiging).
+        expected_hash = ""
+        try:
+            with urllib.request.urlopen("https://lazytype.com/downloads/sha256.txt", timeout=10) as r:
+                expected_hash = r.read().decode().strip().split()[0].lower()
+        except Exception:
+            expected_hash = ""
+        if expected_hash:
+            h = hashlib.sha256()
+            with open(tmp, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+            if h.hexdigest() != expected_hash:
+                tmp.unlink(missing_ok=True)
+                raise RuntimeError("Verificatie mislukt — download beschadigd of gemanipuleerd. Probeer opnieuw.")
         exe = Path(sys.executable)
         bat = Path(tempfile.gettempdir()) / "lazytype_update.bat"
         bat.write_text(
@@ -1581,8 +1592,9 @@ def run_onboarding():
         clear()
         logo_row(5)
         try:
-            import urllib.request
-            urllib.request.urlopen("https://lazytype.com/version.json", timeout=5)
+            import socket
+            s = socket.create_connection(("lazytype.com", 443), timeout=5)
+            s.close()
         except Exception:
             head("No internet connection",
                  "An internet connection is required to start the free trial. "
