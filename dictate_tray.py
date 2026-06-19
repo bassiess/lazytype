@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -1355,10 +1355,16 @@ def _install_update(new_version: str, parent_window=None):
             'copy /y "%SRC%" "%DST%" >nul 2>&1\r\n'
             "if errorlevel 1 goto retry\r\n"        # exe nog vergrendeld → opnieuw proberen
             ":launch\r\n"
-            # GEEN _MEI-sweep hier: die verwijderde tijdens de afsluit-race een nog
-            # gebruikte _MEI-map → "Failed to load Python DLL". Opruimen gebeurt nu
-            # veilig bij het opstarten (_cleanup_stale_mei), met overslaan van mappen
-            # die nog vergrendeld of recent zijn.
+            # KRITIEK: wis de PyInstaller-onefile env-vars vóór de herstart. De cmd
+            # erfde ze van het oude proces; zonder wissen pakt de NIEUWE exe ze over en
+            # zoekt zijn DLL in de OUDE (opgeruimde) _MEI-map → "Failed to load Python
+            # DLL ...python3xx.dll". Wissen → nieuwe exe pakt fris uit naar een nieuwe map.
+            'set "_MEIPASS2="\r\n'
+            'set "_PYI_APPLICATION_HOME_DIR="\r\n'
+            'set "_PYI_ARCHIVE_FILE="\r\n'
+            'set "_PYI_PARENT_PROCESS_LEVEL="\r\n'
+            # GEEN _MEI-sweep hier (die verwijderde een nog gebruikte map). Opruimen
+            # gebeurt veilig bij het opstarten via _cleanup_stale_mei.
             'start "" "%DST%"\r\n'
             'del "%SRC%" >nul 2>&1\r\n'
             'del "%~f0" >nul 2>&1\r\n',
@@ -1366,11 +1372,17 @@ def _install_update(new_version: str, parent_window=None):
         DETACHED_PROCESS          = 0x00000008
         CREATE_NEW_PROCESS_GROUP  = 0x00000200
         CREATE_NO_WINDOW          = 0x08000000
+        # Geef de cmd een omgeving ZONDER de PyInstaller-onefile-vars, zodat de nieuwe
+        # exe (via 'start') vers uitpakt i.p.v. de oude _MEI-map te zoeken.
+        _clean_env = {k: v for k, v in os.environ.items()
+                      if k not in ("_MEIPASS2", "_PYI_APPLICATION_HOME_DIR",
+                                   "_PYI_ARCHIVE_FILE", "_PYI_PARENT_PROCESS_LEVEL")}
         subprocess.Popen(
             ["cmd", "/c", str(bat)],
             cwd=tempfile.gettempdir(),   # NIET _MEI → bootloader kan straks opruimen
             creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
             close_fds=True,
+            env=_clean_env,
         )
         try:
             if parent_window:
