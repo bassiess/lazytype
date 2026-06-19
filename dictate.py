@@ -85,10 +85,13 @@ load_env()
 ENGINE = os.environ.get("DICTATE_ENGINE", "groq").lower()
 
 # Platform-specifieke standaard sneltoetsen.
-# Windows: Ctrl+Win = dicteren, Win+Alt = vertalen (comfortabel, weinig conflicten).
-# Mac: Rechter Ctrl = dicteren, Rechter Option = vertalen (minst bezet op macOS).
+# Windows: Ctrl+Win = dicteren, Ctrl = command, Win+Alt = vertalen (weinig conflicten).
+# Mac: Rechter Ctrl = dicteren, Rechter Shift = command, Rechter Option = vertalen.
+#   (De Windows/Cmd-toets wordt op Mac bewust NIET gebruikt. Command stond eerder óók
+#    op Rechter Option → botste met vertalen, waardoor de vertaaltoets nooit werkte;
+#    command is daarom verplaatst naar Rechter Shift.)
 _DEFAULT_HOTKEY           = "ctrl+win" if IS_WIN else "ctrl_r"
-_DEFAULT_COMMAND_HOTKEY   = "ctrl_r"   if IS_WIN else "alt_r"
+_DEFAULT_COMMAND_HOTKEY   = "ctrl_r"   if IS_WIN else "shift_r"
 _DEFAULT_TRANSLATE_HOTKEY = "win+alt"  if IS_WIN else "alt_r"
 
 HOTKEY_NAME = os.environ.get("DICTATE_HOTKEY") or _DEFAULT_HOTKEY
