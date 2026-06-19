@@ -1,16 +1,29 @@
 <?php
 /**
- * POST /api/trial.php
- * Geeft een 14-daagse proefsleutel terug voor het opgegeven e-mailadres.
- * Elk e-mailadres krijgt maximaal één proefsleutel.
+ * POST /api/trial.php — proefaanvraag met e-mailverificatie (2-staps).
+ *
+ *   1) Zonder 'code'  → genereert een 6-cijferige code, mailt die, antwoordt
+ *                       {ok, code_sent:true}. GEEN sleutel.
+ *   2) Met 'code'     → verifieert de code en geeft pas dán de proefsleutel terug.
+ *
+ * Beleid:
+ *   • Eén gratis proef per e-mailadres.
+ *   • Na het verlopen van de proef is het adres 6 maanden geblokkeerd voor nieuwe
+ *     proeven; daarna mag het één nieuwe proef.
  */
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 
 header('Content-Type: application/json');
 
+const TRIAL_DAYS      = 14;
+const COOLDOWN_MONTHS = 6;
+const CODE_TTL_MIN    = 15;
+const CODE_MAX_TRIES  = 5;
+
 $email  = trim(strtolower($_POST['email']  ?? ''));
 $device = trim($_POST['device'] ?? '');
+$code   = trim($_POST['code']   ?? '');
 
 if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     http_response_code(400);
@@ -24,7 +37,7 @@ function b64e(string $bytes): string {
 
 function make_trial_key(string $email): string {
     $now = time();
-    $exp = $now + 14 * 86400;
+    $exp = $now + TRIAL_DAYS * 86400;
     $payload = json_encode([
         'id'    => b64e(random_bytes(6)),
         'email' => $email,
@@ -37,29 +50,11 @@ function make_trial_key(string $email): string {
     return "LZT.{$pb}.{$sig}";
 }
 
-function send_trial_email(string $to, string $key, bool $recovery = false): bool {
-    $subject = $recovery
-        ? 'Je Lazytype-proefsleutel (opnieuw toegestuurd)'
-        : 'Je Lazytype-proefsleutel (14 dagen gratis)';
-    $intro = $recovery
-        ? 'Hier is (opnieuw) je proefsleutel voor Lazytype:'
-        : 'Hier is je 14-daagse proefsleutel voor Lazytype:';
-    $msg = implode("\r\n", [
-        "Hallo,",
-        "",
-        $intro,
-        "",
-        $key,
-        "",
-        "De sleutel is al ingesteld in de app. Wil je hem later handmatig invoeren:",
-        "tray-menu → Abonnement-sleutel invoeren…",
-        "",
-        "Je proefperiode loopt door tot de oorspronkelijke einddatum — opnieuw aanvragen",
-        "start de 14 dagen niet opnieuw.",
-        "",
-        "Succes met dicteren!",
-        "Team Lazytype",
-    ]);
+function code_hash(string $code): string {
+    return hash_hmac('sha256', $code, LICENSE_SECRET);
+}
+
+function mail_send(string $to, string $subject, string $body): bool {
     $headers = implode("\r\n", [
         'From: ' . MAIL_FROM_NAME . ' <' . MAIL_FROM . '>',
         'Reply-To: ' . MAIL_FROM,
@@ -70,14 +65,52 @@ function send_trial_email(string $to, string $key, bool $recovery = false): bool
         'Message-ID: <' . bin2hex(random_bytes(8)) . '@lazytype.com>',
         'Date: ' . date(DATE_RFC2822),
     ]);
-    return (bool)@mail($to, $subject, $msg, $headers, '-f' . MAIL_FROM);
+    return (bool)@mail($to, $subject, $body, $headers, '-f' . MAIL_FROM);
+}
+
+function send_code_email(string $to, string $code): bool {
+    $body = implode("\r\n", [
+        "Hallo,", "",
+        "Je verificatiecode voor je Lazytype-proefperiode is:", "",
+        "    {$code}", "",
+        "Vul deze code in de app in om je " . TRIAL_DAYS . "-daagse proef te starten.",
+        "De code is " . CODE_TTL_MIN . " minuten geldig.", "",
+        "Heb je dit niet aangevraagd? Dan kun je deze mail negeren.", "",
+        "Team Lazytype",
+    ]);
+    return mail_send($to, 'Je Lazytype-verificatiecode', $body);
+}
+
+function send_key_email(string $to, string $key): bool {
+    $body = implode("\r\n", [
+        "Hallo,", "",
+        "Je proefperiode is gestart! Je licentiesleutel (als backup):", "",
+        "    {$key}", "",
+        "De sleutel is al in de app ingesteld. Handmatig invoeren kan via:",
+        "tray-menu -> Abonnement-sleutel invoeren...", "",
+        "Succes met dicteren!", "Team Lazytype",
+    ]);
+    return mail_send($to, 'Je Lazytype-proefsleutel', $body);
+}
+
+// active | cooldown(until) | again | new
+function eligibility(PDO $db, string $email): array {
+    $stmt = $db->prepare("SELECT license_key, expires_at FROM trials WHERE email = ? LIMIT 1");
+    $stmt->execute([$email]);
+    $row = $stmt->fetch();
+    if (!$row) return ['status' => 'new'];
+    if (strtotime($row['expires_at']) > time()) return ['status' => 'active', 'row' => $row];
+    $cooldown_end = strtotime($row['expires_at'] . ' +' . COOLDOWN_MONTHS . ' months');
+    if (time() < $cooldown_end) return ['status' => 'cooldown', 'until' => $cooldown_end];
+    return ['status' => 'again', 'row' => $row];
 }
 
 try {
     init_db();
     $db = get_db();
+    $ip_hash = hash('sha256', $_SERVER['REMOTE_ADDR'] ?? '');
 
-    // Weiger trial als dit e-mailadres al een actief abonnement heeft
+    // Actief abonnement? Dan geen proef nodig.
     $chk = $db->prepare("SELECT id FROM purchases WHERE email = ? AND status = 'active' LIMIT 1");
     $chk->execute([$email]);
     if ($chk->fetch()) {
@@ -86,64 +119,77 @@ try {
         exit;
     }
 
-    $ip_hash = hash('sha256', $_SERVER['REMOTE_ADDR'] ?? '');
+    $elig = eligibility($db, $email);
+    if ($elig['status'] === 'cooldown') {
+        http_response_code(403);
+        $until = date('j-n-Y', $elig['until']);
+        echo json_encode(['ok' => false, 'error' => "Dit e-mailadres heeft de gratis proef al gebruikt. Een nieuwe proef kan vanaf {$until}, of upgrade nu op lazytype.com."]);
+        exit;
+    }
 
-    // Lichte rate-limit op het VERSTUREN van mail (nieuw + opnieuw), tegen inbox-spam.
-    $mail_rate_ok = function () use ($db, $ip_hash): bool {
-        $c = $db->prepare("SELECT COUNT(*) FROM rate_limits WHERE key_hash = ? AND endpoint = 'trial_mail' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
-        $c->execute([$ip_hash]);
-        return (int)$c->fetchColumn() < 6;
-    };
-    $log_mail = function () use ($db, $ip_hash) {
-        $db->prepare("INSERT INTO rate_limits (key_hash, endpoint) VALUES (?, 'trial_mail')")->execute([$ip_hash]);
-    };
-
-    // Eén gratis proef per e-mailadres — OOIT. Bestaat er al een proef voor dit adres?
-    $stmt = $db->prepare("SELECT license_key, expires_at FROM trials WHERE email = ? LIMIT 1");
-    $stmt->execute([$email]);
-    $row = $stmt->fetch();
-    if ($row) {
-        if (strtotime($row['expires_at']) > time()) {
-            // Nog geldig → geef dezelfde sleutel terug (de app slaat 'm op). De vervaldatum
-            // blijft ONGEWIJZIGD — opnieuw aanvragen verlengt/herstart de proef NIET. De
-            // sleutel-mail wordt (met rate-limit) opnieuw verstuurd zodat je 'm in je inbox hebt.
-            $mail_sent = false;
-            if ($mail_rate_ok()) {
-                $mail_sent = send_trial_email($email, $row['license_key'], true);
-                $log_mail();
-            }
-            echo json_encode(['ok' => true, 'key' => $row['license_key'], 'mail_sent' => $mail_sent]);
-        } else {
-            // Verlopen → GEEN nieuwe proef (anti-misbruik: niet eindeloos te herhalen)
-            http_response_code(403);
-            echo json_encode(['ok' => false, 'error' => 'Dit e-mailadres heeft de gratis proefperiode al gebruikt. Upgrade op lazytype.com om door te gaan.']);
+    // ── STAP 1: verificatiecode aanvragen ─────────────────────────────────────
+    if ($code === '') {
+        // Rate limit: max 10 code-aanvragen per IP per dag (tegen mail-bombing).
+        $rc = $db->prepare("SELECT COUNT(*) FROM rate_limits WHERE key_hash = ? AND endpoint = 'trial_code' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+        $rc->execute([$ip_hash]);
+        if ((int)$rc->fetchColumn() >= 10) {
+            http_response_code(429);
+            echo json_encode(['ok' => false, 'error' => 'Te veel aanvragen. Probeer het later opnieuw.']);
+            exit;
         }
+        $db->prepare("INSERT INTO rate_limits (key_hash, endpoint) VALUES (?, 'trial_code')")->execute([$ip_hash]);
+
+        $code6 = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $db->prepare("INSERT INTO email_codes (email, code_hash, attempts, expires_at)
+                      VALUES (?, ?, 0, DATE_ADD(NOW(), INTERVAL " . CODE_TTL_MIN . " MINUTE))
+                      ON DUPLICATE KEY UPDATE code_hash = VALUES(code_hash), attempts = 0, expires_at = VALUES(expires_at), created_at = NOW()")
+           ->execute([$email, code_hash($code6)]);
+
+        $sent = send_code_email($email, $code6);
+        echo json_encode(['ok' => true, 'code_sent' => true, 'mail_sent' => $sent]);
         exit;
     }
 
-    // ── Rate limiting: max 3 NIEUWE trials per IP per dag ─────────────────────
-    $ip_cnt = $db->prepare("SELECT COUNT(*) FROM rate_limits WHERE key_hash = ? AND endpoint = 'trial' AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)");
-    $ip_cnt->execute([$ip_hash]);
-    if ((int)$ip_cnt->fetchColumn() >= 3) {
+    // ── STAP 2: code verifiëren + sleutel uitgeven ────────────────────────────
+    $cs = $db->prepare("SELECT code_hash, attempts, expires_at FROM email_codes WHERE email = ? LIMIT 1");
+    $cs->execute([$email]);
+    $crow = $cs->fetch();
+    if (!$crow || strtotime($crow['expires_at']) < time()) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'Geen geldige code. Vraag een nieuwe verificatiecode aan.']);
+        exit;
+    }
+    if ((int)$crow['attempts'] >= CODE_MAX_TRIES) {
+        $db->prepare("DELETE FROM email_codes WHERE email = ?")->execute([$email]);
         http_response_code(429);
-        echo json_encode(['ok' => false, 'error' => 'Te veel aanvragen van dit IP-adres. Probeer morgen opnieuw.']);
+        echo json_encode(['ok' => false, 'error' => 'Te veel onjuiste pogingen. Vraag een nieuwe code aan.']);
         exit;
     }
-    $db->prepare("INSERT INTO rate_limits (key_hash, endpoint) VALUES (?, 'trial')")->execute([$ip_hash]);
+    if (!hash_equals($crow['code_hash'], code_hash($code))) {
+        $db->prepare("UPDATE email_codes SET attempts = attempts + 1 WHERE email = ?")->execute([$email]);
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'Onjuiste code.']);
+        exit;
+    }
+    // Code klopt → eenmalig gebruiken.
+    $db->prepare("DELETE FROM email_codes WHERE email = ?")->execute([$email]);
 
-    // Nieuw adres → precies één proef aanmaken. Plain INSERT (nooit verlengen).
-    $key = make_trial_key($email);
-    $db->prepare("INSERT INTO trials (email, device, license_key, expires_at)
-                  VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 14 DAY))")
-       ->execute([$email, $device, $key]);
-
-    $mail_sent = false;
-    if ($mail_rate_ok()) {
-        $mail_sent = send_trial_email($email, $key, false);
-        $log_mail();
+    // Sleutel uitgeven o.b.v. eligibility (kan hier niet 'cooldown' zijn).
+    if ($elig['status'] === 'active') {
+        $key = $elig['row']['license_key'];                       // herstel: zelfde sleutel
+    } elseif ($elig['status'] === 'again') {
+        $key = make_trial_key($email);                            // nieuwe proef na 6 mnd
+        $db->prepare("UPDATE trials SET license_key = ?, expires_at = DATE_ADD(NOW(), INTERVAL " . TRIAL_DAYS . " DAY), device = ?, device_2 = NULL, reminded_at = NULL WHERE email = ?")
+           ->execute([$key, $device, $email]);
+    } else { // new
+        $key = make_trial_key($email);
+        $db->prepare("INSERT INTO trials (email, device, license_key, expires_at)
+                      VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL " . TRIAL_DAYS . " DAY))")
+           ->execute([$email, $device, $key]);
     }
 
-    echo json_encode(['ok' => true, 'key' => $key, 'mail_sent' => $mail_sent]);
+    send_key_email($email, $key);
+    echo json_encode(['ok' => true, 'key' => $key]);
 
 } catch (Exception $e) {
     http_response_code(500);

@@ -63,6 +63,19 @@ function init_db(): void {
     try { $db->exec("ALTER TABLE trials ADD COLUMN device_2    VARCHAR(64) DEFAULT NULL"); } catch (\Exception $e) {}
     try { $db->exec("ALTER TABLE trials ADD COLUMN reminded_at DATETIME    DEFAULT NULL"); } catch (\Exception $e) {}
 
+    // E-mailverificatie: tijdelijke 6-cijferige codes (gehasht). Één actieve code per adres.
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS email_codes (
+            email      VARCHAR(255) NOT NULL,
+            code_hash  VARCHAR(64)  NOT NULL,
+            attempts   INT          DEFAULT 0,
+            expires_at DATETIME     NOT NULL,
+            created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_email (email),
+            INDEX idx_expires (expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
     $db->exec("
         CREATE TABLE IF NOT EXISTS downloads (
             id         INT AUTO_INCREMENT PRIMARY KEY,

@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.1.10"
+APP_VERSION = "1.2.0"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -720,8 +720,9 @@ def set_key_action(icon_, item):
     threading.Thread(target=worker, daemon=True).start()
 
 
-def _request_trial_key(email: str) -> str:
-    """POST naar trial.php → geeft proefsleutel terug of raise RuntimeError."""
+def _request_trial_code(email: str) -> None:
+    """STAP 1: vraag een 6-cijferige verificatiecode aan (server mailt die).
+    Niets terug bij succes; raise RuntimeError bij fout (bv. cooldown/al gebruikt)."""
     try:
         import requests
         base = dictate.API_URL.rsplit("/", 1)[0]
@@ -730,7 +731,27 @@ def _request_trial_key(email: str) -> str:
             "device": dictate.ensure_device_id(),
         }, timeout=15)
         data = r.json()
-        if r.ok and data.get("ok"):
+        if r.ok and data.get("ok") and data.get("code_sent"):
+            return
+        raise RuntimeError(data.get("error", f"Serverfout {r.status_code}"))
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"Geen verbinding: {e}")
+
+
+def _verify_trial_code(email: str, code: str) -> str:
+    """STAP 2: verifieer de code → geeft de proefsleutel terug of raise RuntimeError."""
+    try:
+        import requests
+        base = dictate.API_URL.rsplit("/", 1)[0]
+        r = requests.post(f"{base}/trial.php", data={
+            "email": email.strip(),
+            "code": code.strip(),
+            "device": dictate.ensure_device_id(),
+        }, timeout=15)
+        data = r.json()
+        if r.ok and data.get("ok") and data.get("key"):
             return data["key"]
         raise RuntimeError(data.get("error", f"Serverfout {r.status_code}"))
     except RuntimeError:
@@ -1652,6 +1673,19 @@ def run_onboarding():
         email_entry.pack(fill="x", ipady=6, pady=(4, 0))
         email_entry.focus_set()
 
+        # Codeveld — verschijnt pas nadat er een verificatiecode is verstuurd.
+        code_frame = tk.Frame(body, bg=UI_PAPER)
+        tk.Label(code_frame, text="6-digit code from your email",
+                 bg=UI_PAPER, fg=UI_SUB, font=UI_FONT, anchor="w").pack(fill="x", padx=24)
+        code_var = tk.StringVar()
+        code_entry = tk.Entry(code_frame, textvariable=code_var, font=("Consolas", 15),
+                              relief="flat", bg="#ffffff", fg=UI_INK, justify="center",
+                              insertbackground=UI_INK, highlightthickness=1,
+                              highlightbackground="#dedbd3", highlightcolor=UI_ACCENT)
+        code_entry.pack(fill="x", padx=24, ipady=6, pady=(4, 0))
+        _ghost_btn(tk, code_frame, "Resend code",
+                   lambda: resend_code()).pack(anchor="w", padx=24, pady=(2, 0))
+
         status_var = tk.StringVar()
         tk.Label(body, textvariable=status_var, bg=UI_PAPER, fg=UI_SUB,
                  font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=24, pady=(4, 0))
@@ -1688,27 +1722,52 @@ def run_onboarding():
             rebuild_hotkeys()
             root.destroy()
 
-        def start_trial():
+        def send_code():
             email = email_var.get().strip()
             if not email or "@" not in email:
                 status_var.set("Please enter a valid email address.")
                 return
-            status_var.set("Requesting your trial key…")
+            status_var.set("Sending a verification code…")
             root.update()
             try:
-                key = _request_trial_key(email)
+                _request_trial_code(email)
+                email_entry.config(state="disabled")
+                code_frame.pack(fill="x", pady=(8, 0), after=ef)
+                code_entry.focus_set()
+                primary["btn"].config(text="Verify & start →", command=verify_code)
+                status_var.set("Code sent — check your inbox (and spam), then enter it above.")
+            except Exception as e:
+                status_var.set(str(e))
+
+        def resend_code():
+            try:
+                _request_trial_code(email_var.get().strip())
+                status_var.set("New code sent — check your email (and spam).")
+            except Exception as e:
+                status_var.set(str(e))
+
+        def verify_code():
+            code = code_var.get().strip()
+            if not code:
+                status_var.set("Enter the 6-digit code from your email.")
+                return
+            status_var.set("Verifying…")
+            root.update()
+            try:
+                key = _verify_trial_code(email_var.get().strip(), code)
                 dictate.save_env_value("LAZYTYPE_LICENSE", key)
                 os.environ["LAZYTYPE_LICENSE"] = key
                 state["engine"] = "managed"
                 dictate.save_env_value("DICTATE_ENGINE", "managed")
-                status_var.set("Done! 14 days free. Check your email for the key.")
-                root.after(1200, finish)
+                status_var.set("Done! Your 14-day trial has started.")
+                root.after(1000, finish)
             except Exception as e:
-                status_var.set(f"Error: {e}")
+                status_var.set(str(e))
 
         bar = tk.Frame(body, bg=UI_PAPER)
         bar.pack(side="bottom", fill="x", padx=22, pady=14)
-        _accent_btn(tk, bar, "Start free trial →", start_trial).pack(side="right")
+        primary = {"btn": _accent_btn(tk, bar, "Send code →", send_code)}
+        primary["btn"].pack(side="right")
         _ghost_btn(tk, bar, "← Back", s_transkey).pack(side="left")
         _ghost_btn(tk, bar, "Skip for now", finish).pack(side="left", padx=(12, 0))
 
