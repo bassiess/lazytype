@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.3.0"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -125,6 +125,7 @@ state = {
     "phase": "idle",     # idle | recording | working
     "enabled": True,
     "last": "",
+    "last_dictation": "",   # laatste GESLAAGDE dictaat-tekst (voor command-op-laatste)
     "busy": False,
     "history": dictate.HISTORY_ENABLED,   # dicteer-geschiedenis bewaren
     "overlay": os.environ.get("DICTATE_OVERLAY", "1").lower() in ("1", "true", "yes", "on"),
@@ -169,26 +170,51 @@ HOTKEY_CHOICES = [("Right Ctrl", "ctrl_r"), ("Left Ctrl", "ctrl_l"),
 
 def _hk_display(spec):
     return next((l for l, v in HOTKEY_CHOICES if v == spec), spec)
-LANG_CHOICES = [
-    ("English", "en"), ("Dutch", "nl"), ("German", "de"), ("French", "fr"),
-    ("Spanish", "es"), ("Italian", "it"), ("Portuguese", "pt"),
-    ("Polish", "pl"), ("Russian", "ru"), ("Ukrainian", "uk"),
-    ("Swedish", "sv"), ("Norwegian", "no"), ("Danish", "da"), ("Finnish", "fi"),
-    ("Turkish", "tr"), ("Arabic", "ar"), ("Japanese", "ja"),
-    ("Chinese", "zh"), ("Korean", "ko"),
+# Alle door Whisper ondersteunde talen (ISO-code → naam). Eén bron voor alle
+# taal-keuzelijsten (spreektaal, vertaaldoel, nabewerking). ~99 talen.
+LANGUAGES = [
+    ("Afrikaans", "af"), ("Albanian", "sq"), ("Amharic", "am"), ("Arabic", "ar"),
+    ("Armenian", "hy"), ("Assamese", "as"), ("Azerbaijani", "az"), ("Bashkir", "ba"),
+    ("Basque", "eu"), ("Belarusian", "be"), ("Bengali", "bn"), ("Bosnian", "bs"),
+    ("Breton", "br"), ("Bulgarian", "bg"), ("Cantonese", "yue"), ("Catalan", "ca"),
+    ("Chinese", "zh"), ("Croatian", "hr"), ("Czech", "cs"), ("Danish", "da"),
+    ("Dutch", "nl"), ("English", "en"), ("Estonian", "et"), ("Faroese", "fo"),
+    ("Finnish", "fi"), ("French", "fr"), ("Galician", "gl"), ("Georgian", "ka"),
+    ("German", "de"), ("Greek", "el"), ("Gujarati", "gu"), ("Haitian Creole", "ht"),
+    ("Hausa", "ha"), ("Hawaiian", "haw"), ("Hebrew", "he"), ("Hindi", "hi"),
+    ("Hungarian", "hu"), ("Icelandic", "is"), ("Indonesian", "id"), ("Italian", "it"),
+    ("Japanese", "ja"), ("Javanese", "jw"), ("Kannada", "kn"), ("Kazakh", "kk"),
+    ("Khmer", "km"), ("Korean", "ko"), ("Lao", "lo"), ("Latin", "la"),
+    ("Latvian", "lv"), ("Lingala", "ln"), ("Lithuanian", "lt"), ("Luxembourgish", "lb"),
+    ("Macedonian", "mk"), ("Malagasy", "mg"), ("Malay", "ms"), ("Malayalam", "ml"),
+    ("Maltese", "mt"), ("Maori", "mi"), ("Marathi", "mr"), ("Mongolian", "mn"),
+    ("Myanmar", "my"), ("Nepali", "ne"), ("Norwegian", "no"), ("Nynorsk", "nn"),
+    ("Occitan", "oc"), ("Pashto", "ps"), ("Persian", "fa"), ("Polish", "pl"),
+    ("Portuguese", "pt"), ("Punjabi", "pa"), ("Romanian", "ro"), ("Russian", "ru"),
+    ("Sanskrit", "sa"), ("Serbian", "sr"), ("Shona", "sn"), ("Sindhi", "sd"),
+    ("Sinhala", "si"), ("Slovak", "sk"), ("Slovenian", "sl"), ("Somali", "so"),
+    ("Spanish", "es"), ("Sundanese", "su"), ("Swahili", "sw"), ("Swedish", "sv"),
+    ("Tagalog", "tl"), ("Tajik", "tg"), ("Tamil", "ta"), ("Tatar", "tt"),
+    ("Telugu", "te"), ("Thai", "th"), ("Tibetan", "bo"), ("Turkish", "tr"),
+    ("Turkmen", "tk"), ("Ukrainian", "uk"), ("Urdu", "ur"), ("Uzbek", "uz"),
+    ("Vietnamese", "vi"), ("Welsh", "cy"), ("Yiddish", "yi"), ("Yoruba", "yo"),
 ]
-SPOKEN_CHOICES = [("Auto-detect", "auto"), ("Dutch", "nl"), ("English", "en"),
-                  ("German", "de"), ("French", "fr"), ("Spanish", "es")]
+
+# Afgeleide keuzelijsten — overal dezelfde ~99 talen.
+LANG_CHOICES = list(LANGUAGES)                                    # vertaaldoel
+TRANSLATE_TO_CHOICES = list(LANGUAGES)                            # idem (onboarding)
+SPOKEN_CHOICES = [("Auto-detect", "auto")] + list(LANGUAGES)     # spreektaal (+ auto)
 ENGINE_CHOICES = [("Managed (Pro)", "managed"), ("Groq (own key)", "groq"),
                   ("OpenAI", "openai"), ("Local", "local")]
 
-LANG_DISPLAY = {
-    "en": "English", "nl": "Dutch", "de": "German", "fr": "French",
-    "es": "Spanish", "it": "Italian", "pt": "Portuguese", "pl": "Polish",
-    "ru": "Russian", "uk": "Ukrainian", "sv": "Swedish", "no": "Norwegian",
-    "da": "Danish", "fi": "Finnish", "tr": "Turkish", "ar": "Arabic",
-    "ja": "Japanese", "zh": "Chinese", "ko": "Korean", "auto": "Auto-detect",
-}
+LANG_DISPLAY = {code: name for name, code in LANGUAGES}
+LANG_DISPLAY["auto"] = "Auto-detect"
+
+# AI-nabewerking voor het normale dictaat: uit / opschonen / vertaal naar taal.
+POSTPROC_CHOICES = [("Uit", "off"), ("Opschonen (zelfde taal)", "clean"),
+                    ("Vertaal → Engels", "en"), ("Vertaal → Nederlands", "nl"),
+                    ("Vertaal → Duits", "de"), ("Vertaal → Frans", "fr"),
+                    ("Vertaal → Spaans", "es")]
 
 
 def render_icon(accent, size=64, shape="squircle", bar=BAR, bg=INK):
@@ -341,9 +367,11 @@ def handle_release():
         t0 = time.time()
         mode = state.get("active_mode")
         if mode == "command":
-            sel = dictate.copy_selection()
+            # Geselecteerde tekst heeft voorrang; is er niets geselecteerd, dan passen
+            # we de gesproken instructie toe op het LAATSTE dictaat (command-op-laatste).
+            sel = dictate.copy_selection() or state.get("last_dictation", "")
             if not sel:
-                state["last"] = "Command: geen tekst geselecteerd"
+                state["last"] = "Command: selecteer tekst of dicteer eerst iets"
                 threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
                 return
             state["last"] = "Commando verwerken…"
@@ -375,6 +403,7 @@ def handle_release():
             return
         print(f"  ✅ ({dt:.2f}s) → {text}")
         state["last"] = text
+        state["last_dictation"] = text   # voor command-op-laatste (ook ketenen van edits)
         hwnd = state.get("target_hwnd", 0)
 
         # Paste uitvoeren op de overlay-thread (Tkinter-mainloop = Win32 message queue
@@ -897,12 +926,33 @@ def _dropdown(tk, parent, label, choices, current):
     cur = next((l for l, v in choices if v == current), choices[0][0])
     tk.Label(parent, text=label, bg=UI_PAPER, fg=UI_INK, font=UI_FONT, anchor="w").pack(fill="x", padx=18, pady=(10, 2))
     var = tk.StringVar(master=parent, value=cur)
+
+    # Lange lijsten (talen, ~99) → scrollbare combobox; typ een letter om te springen.
+    if len(choices) > 12:
+        from tkinter import ttk
+        cb = ttk.Combobox(parent, textvariable=var, values=[l for l, _ in choices],
+                          state="readonly", font=UI_FONT, height=18)
+        cb.pack(fill="x", padx=18, ipady=2)
+        return lambda: next((v for l, v in choices if l == var.get()), current)
+
+    # Korte lijsten → klassieke OptionMenu in de site-stijl.
     om = tk.OptionMenu(parent, var, *[l for l, _ in choices])
     om.configure(bg="#ffffff", fg=UI_INK, font=UI_FONT, relief="flat", anchor="w",
                  highlightthickness=1, highlightbackground="#dedbd3", activebackground="#efecfd")
     om["menu"].configure(bg="#ffffff", fg=UI_INK, font=UI_FONT, activebackground=UI_ACCENT, activeforeground="white")
     om.pack(fill="x", padx=18)
     return lambda: next((v for l, v in choices if l == var.get()), choices[0][1])
+
+
+def _checkbox(tk, parent, label, initial):
+    """Aan/uit-vinkje in de site-stijl. Geeft een getter terug (bool)."""
+    var = tk.BooleanVar(master=parent, value=bool(initial))
+    cb = tk.Checkbutton(parent, text=label, variable=var, bg=UI_PAPER, fg=UI_INK,
+                        font=UI_FONT, anchor="w", activebackground=UI_PAPER,
+                        activeforeground=UI_INK, selectcolor="#ffffff",
+                        highlightthickness=0, bd=0, cursor="hand2")
+    cb.pack(fill="x", padx=16, pady=(6, 0))
+    return lambda: bool(var.get())
 
 
 def _accent_btn(tk, parent, text, cmd):
@@ -1079,7 +1129,7 @@ def open_dashboard(start_tab="instellingen"):
     root.configure(bg=UI_PAPER)
     root.attributes("-topmost", True)
     root.resizable(False, False)
-    W, H = 500, 640
+    W, H = 560, 660
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
 
@@ -1110,11 +1160,13 @@ def open_dashboard(start_tab="instellingen"):
 
     for tid, tlabel in [("abonnement", "Abonnement"),
                          ("instellingen", "Instellingen"),
-                         ("over", "Over & Update")]:
+                         ("woorden", "Woorden"),
+                         ("status", "Status"),
+                         ("over", "Over")]:
         f = tk.Frame(content, bg=UI_PAPER)
         tab_frames[tid] = f
         b = tk.Button(tab_bar, text=tlabel, bg=UI_PAPER, relief="flat", bd=0,
-                      padx=16, pady=10, activebackground=UI_PAPER,
+                      padx=12, pady=10, activebackground=UI_PAPER,
                       activeforeground=UI_ACCENT,
                       command=lambda t=tid: show_tab(t))
         b.pack(side="left")
@@ -1201,6 +1253,20 @@ def open_dashboard(start_tab="instellingen"):
                         ("language",          "DICTATE_LANGUAGE"),
                         ("engine",            "DICTATE_ENGINE")):
             dictate.save_env_value(envk, state[k])
+        # Nabewerking & gedrag
+        state["postprocess"] = g_pp()
+        dictate.save_env_value("DICTATE_POSTPROCESS", state["postprocess"])
+        new_overlay = g_overlay()
+        if new_overlay != state["overlay"]:
+            state["overlay"] = new_overlay
+            dictate.save_env_value("DICTATE_OVERLAY", "1" if new_overlay else "0")
+            overlay_ui.start() if new_overlay else overlay_ui.stop()
+        state["history"] = g_history()
+        dictate.save_env_value("DICTATE_HISTORY", "1" if state["history"] else "0")
+        if autostart_supported():
+            _want = g_autostart()
+            if _want is not None and _want != is_autostart():
+                set_autostart(_want)
         rebuild_hotkeys()
         if icon:
             state["last"] = "Instellingen opgeslagen ✓"
@@ -1227,6 +1293,97 @@ def open_dashboard(start_tab="instellingen"):
     g_lang = _dropdown(tk, scr_frame, "Spreektaal", SPOKEN_CHOICES, state["language"])
     g_tgt  = _dropdown(tk, scr_frame, "Vertaal naar", LANG_CHOICES, state["translate_target"])
     g_eng  = _dropdown(tk, scr_frame, "Engine", ENGINE_CHOICES, state["engine"])
+    divider(scr_frame)
+    section(scr_frame, "Nabewerking & gedrag")
+    g_pp = _dropdown(tk, scr_frame, "AI-nabewerking (normaal dictaat)", POSTPROC_CHOICES, state["postprocess"])
+    g_overlay = _checkbox(tk, scr_frame, "Overlay-balkje tonen", state["overlay"])
+    g_history = _checkbox(tk, scr_frame, "Dicteer-geschiedenis bewaren", state["history"])
+    g_autostart = (_checkbox(tk, scr_frame, "Automatisch starten bij inloggen", is_autostart())
+                   if autostart_supported() else (lambda: None))
+
+    # ── TAB: Woorden (woordenboek & snippets) ─────────────────────────────
+    wd = tab_frames["woorden"]
+    from tkinter.scrolledtext import ScrolledText
+
+    def _file_editor(parent, path, title, hint, default=""):
+        section(parent, title)
+        tk.Label(parent, text=hint, bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9),
+                 anchor="w", justify="left", wraplength=W - 48).pack(fill="x", padx=20)
+        box = ScrolledText(parent, height=7, font=UI_MONO, bg="#ffffff", fg=UI_INK,
+                           insertbackground=UI_INK, relief="flat", borderwidth=0,
+                           highlightthickness=1, highlightbackground="#dedbd3", padx=8, pady=6)
+        box.pack(fill="x", padx=20, pady=(4, 0))
+        try:
+            box.insert("1.0", path.read_text(encoding="utf-8"))
+        except Exception:
+            box.insert("1.0", default)
+
+        def _save():
+            try:
+                path.write_text(box.get("1.0", "end-1c"), encoding="utf-8")
+                msg = "Opgeslagen ✓"
+            except Exception as e:
+                msg = f"Opslaan mislukt: {e}"
+            if icon:
+                state["last"] = msg
+                refresh()
+        _accent_btn(tk, parent, "Opslaan", _save).pack(padx=20, pady=(6, 0), anchor="w")
+
+    _file_editor(wd, dictate.DICTIONARY_FILE, "Woordenboek",
+                 "Eén term per regel (namen/jargon). Verbetert de herkenning.",
+                 "# Eén term per regel: namen, jargon, afkortingen.\n")
+    divider(wd)
+    _file_editor(wd, dictate.SNIPPETS_FILE, "Snippets",
+                 "Per regel:  trigger = tekst   (\\n voor een nieuwe regel).",
+                 "# trigger = uit te vouwen tekst\n# bijv:  mijn agenda = https://calendly.com/bas\n")
+
+    # ── TAB: Status (read-only diagnostiek) ───────────────────────────────
+    stt = tab_frames["status"]
+    section(stt, "Status & diagnostiek")
+    _ls = dictate.license_state()
+    _pp = state["postprocess"]
+    _pp_disp = ("Uit" if _pp in ("off", "") else
+                "Opschonen" if _pp == "clean" else "Vertaal → " + LANG_DISPLAY.get(_pp, _pp))
+    _rows = [
+        ("Versie", APP_VERSION),
+        ("Licentie", _ls.get("label", "—")),
+        ("Tier", _ls.get("tier", "—")),
+        ("Dagen resterend", str(_ls.get("days_left")) if _ls.get("days_left") is not None else "—"),
+        ("Engine", state["engine"]),
+        ("Spreektaal", LANG_DISPLAY.get(state["language"], state["language"])),
+        ("Vertaaldoel", LANG_DISPLAY.get(state["translate_target"], state["translate_target"])),
+        ("AI-nabewerking", _pp_disp),
+        ("Dicteer-toets", _hk_display(state["hotkey_name"])),
+        ("Command-toets", _hk_display(state["hotkey_command"])),
+        ("Vertaal-toets", _hk_display(state["hotkey_translate"])),
+        ("Overlay", "aan" if state["overlay"] else "uit"),
+        ("Geschiedenis", "aan" if state["history"] else "uit"),
+        ("Autostart", ("aan" if is_autostart() else "uit") if autostart_supported() else "n.v.t."),
+        ("Apparaat-id", dictate.ensure_device_id()),
+        ("Config-map", str(dictate.ROOT)),
+        ("Laatste dictaat", (state.get("last_dictation") or "—")),
+    ]
+
+    def _statrow(parent, k, v):
+        row = tk.Frame(parent, bg=UI_PAPER)
+        row.pack(fill="x", padx=20, pady=1)
+        tk.Label(row, text=k, bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9),
+                 width=16, anchor="w").pack(side="left")
+        tk.Label(row, text=str(v), bg=UI_PAPER, fg=UI_INK, font=("Segoe UI", 9),
+                 anchor="w", justify="left", wraplength=W - 190).pack(side="left", fill="x", expand=True)
+
+    for _k, _v in _rows:
+        _statrow(stt, _k, _v)
+
+    def _copy_diag():
+        try:
+            dictate._clipboard_set("\n".join(f"{k}: {v}" for k, v in _rows))
+            if icon:
+                state["last"] = "Diagnostiek gekopieerd ✓"
+                refresh()
+        except Exception:
+            pass
+    _ghost_btn(tk, stt, "Kopieer diagnostiek", _copy_diag).pack(padx=20, pady=(14, 0), anchor="w")
 
     # ── TAB: Over & Update ────────────────────────────────────────────────
     ov = tab_frames["over"]
@@ -1483,12 +1640,7 @@ def run_onboarding():
         ("English", "en"), ("Nederlands", "nl"), ("Deutsch", "de"),
         ("Français", "fr"), ("Español", "es"), ("Italiano", "it"),
     ]
-    TRANSLATE_TO_CHOICES = [
-        ("Dutch", "nl"), ("English", "en"), ("German", "de"), ("French", "fr"),
-        ("Spanish", "es"), ("Italian", "it"), ("Portuguese", "pt"),
-        ("Polish", "pl"), ("Russian", "ru"), ("Turkish", "tr"),
-        ("Arabic", "ar"), ("Japanese", "ja"), ("Chinese", "zh"), ("Korean", "ko"),
-    ]
+    # "Translate to" gebruikt de volledige talenlijst (TRANSLATE_TO_CHOICES, globaal).
 
     def clear():
         for w in body.winfo_children():
