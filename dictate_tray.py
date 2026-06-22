@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.8.0"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -448,6 +448,8 @@ def handle_release():
             state["last"] = text
             state["last_dictation"] = text   # voor command-op-laatste (ook ketenen van edits)
             state["last_paste_len"] = len(text) + (1 if dictate.TRAILING_SPACE and not text.endswith(" ") else 0)
+            _kind = "command" if mode == "command" else "vertalen" if mode == "translate" else "dictaat"
+            dictate.record_usage(text, _kind)   # statistiek bijwerken
 
         threading.Thread(target=lambda: dictate.beep("done"), daemon=True).start()
         if not is_undo and state.get("history"):
@@ -507,6 +509,7 @@ def apply_mode(idx: int, matchers):
         state["last"] = result
         state["last_dictation"] = result
         state["last_paste_len"] = len(result) + (1 if dictate.TRAILING_SPACE and not result.endswith(" ") else 0)
+        dictate.record_usage(result, f"mode:{(mode.get('name') or 'Mode').strip()}")   # statistiek
         threading.Thread(target=lambda: dictate.beep("done"), daemon=True).start()
         if state.get("history"):
             dictate.add_history(result)
@@ -1314,8 +1317,9 @@ def open_dashboard(start_tab="instellingen"):
     root.configure(bg=UI_PAPER)
     root.attributes("-topmost", True)
     root.resizable(False, False)
-    W, H = 560, 660
+    W = 560
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+    H = min(880, sh - 80)   # ruim: scrollen is meestal niet meer nodig (blijft als vangnet)
     root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
 
     # ── Tabbalk ──────────────────────────────────────────────────────────
@@ -1326,15 +1330,22 @@ def open_dashboard(start_tab="instellingen"):
     content = tk.Frame(root, bg=UI_PAPER)
     content.pack(fill="both", expand=True)
 
-    tab_frames = {}
+    tab_frames = {}    # tid -> binnenframe (hierin wordt de inhoud gebouwd)
+    tab_pages  = {}    # tid -> holder (canvas + scrollbar; dit toont/verbergt show_tab)
+    tab_canvas = {}    # tid -> canvas (voor muiswiel-scroll)
     tab_btns   = {}
     active     = {"tab": None}
 
     def show_tab(name):
-        for f in tab_frames.values():
-            f.pack_forget()
-        tab_frames[name].pack(fill="both", expand=True, padx=0, pady=0)
+        for p in tab_pages.values():
+            p.pack_forget()
+        tab_pages[name].pack(fill="both", expand=True)
         active["tab"] = name
+        # scrollregio herberekenen nu de tab zichtbaar/gemeten is
+        cv = tab_canvas[name]
+        cv.update_idletasks()
+        cv.configure(scrollregion=cv.bbox("all"))
+        cv.yview_moveto(0.0)
         for n, b in tab_btns.items():
             if n == name:
                 b.config(fg=UI_ACCENT, font=("Segoe UI", 10, "bold"),
@@ -1343,14 +1354,41 @@ def open_dashboard(start_tab="instellingen"):
                 b.config(fg=UI_SUB, font=UI_FONT,
                          relief="flat", bd=0, cursor="hand2")
 
-    for tid, tlabel in [("abonnement", "Abonnement"),
+    def _bind_wheel(widget, cv):
+        """Bind muiswiel-scroll op widget + alle kinderen (Text-velden scrollen zelf)."""
+        def _w(e):
+            if e.delta:
+                cv.yview_scroll(-1 if e.delta > 0 else 1, "units")
+            return "break"
+        stack = [widget]
+        while stack:
+            w = stack.pop()
+            if w.winfo_class() == "Text":      # ScrolledText: eigen scroll behouden
+                continue
+            try: w.bind("<MouseWheel>", _w)
+            except Exception: pass
+            stack.extend(w.winfo_children())
+
+    for tid, tlabel in [("statistieken", "Statistieken"),
+                         ("abonnement", "Abonnement"),
                          ("instellingen", "Instellingen"),
                          ("woorden", "Woorden"),
                          ("modi", "Modi"),
                          ("status", "Status"),
                          ("over", "Over")]:
-        f = tk.Frame(content, bg=UI_PAPER)
+        holder = tk.Frame(content, bg=UI_PAPER)
+        cv = tk.Canvas(holder, bg=UI_PAPER, highlightthickness=0)
+        vb = tk.Scrollbar(holder, orient="vertical", command=cv.yview)
+        cv.configure(yscrollcommand=vb.set)
+        vb.pack(side="right", fill="y")
+        cv.pack(side="left", fill="both", expand=True)
+        f = tk.Frame(cv, bg=UI_PAPER)
+        wid = cv.create_window((0, 0), window=f, anchor="nw")
+        f.bind("<Configure>", lambda e, c=cv: c.configure(scrollregion=c.bbox("all")))
+        cv.bind("<Configure>", lambda e, c=cv, w=wid: c.itemconfigure(w, width=e.width))
         tab_frames[tid] = f
+        tab_pages[tid]  = holder
+        tab_canvas[tid] = cv
         b = tk.Button(tab_bar, text=tlabel, bg=UI_PAPER, relief="flat", bd=0,
                       padx=12, pady=10, activebackground=UI_PAPER,
                       activeforeground=UI_ACCENT,
@@ -1365,6 +1403,69 @@ def open_dashboard(start_tab="instellingen"):
 
     def divider(parent):
         tk.Frame(parent, bg=UI_LINE, height=1).pack(fill="x", padx=20, pady=(10, 2))
+
+    # ── TAB: Statistieken ─────────────────────────────────────────────────
+    sta = tab_frames["statistieken"]
+    _usage = dictate.usage_summary()
+
+    def _fmt_words(n):
+        return f"{int(n):,}".replace(",", ".")
+
+    def _fmt_dur(sec):
+        sec = int(sec); h, m = sec // 3600, (sec % 3600) // 60
+        if h >= 1: return f"{h} uur {m} min"
+        if m >= 1: return f"{m} min"
+        return f"{sec} sec"
+
+    def _kind_label(k):
+        return {"dictaat": "Dictaat", "command": "Command", "vertalen": "Vertalen"}.get(
+            k, (k[5:] + " (mode)") if k.startswith("mode:") else k)
+
+    section(sta, "Jouw cijfers")
+    cards = tk.Frame(sta, bg=UI_PAPER)
+    cards.pack(fill="x", padx=16, pady=(4, 0))
+    for _i in range(3):
+        cards.columnconfigure(_i, weight=1)
+    for _col, (_pk, _plabel) in enumerate([("7d", "Afgelopen 7 dagen"),
+                                           ("30d", "Afgelopen maand"),
+                                           ("365d", "Afgelopen jaar")]):
+        _d = _usage[_pk]
+        card = tk.Frame(cards, bg="#f0efe9")
+        card.grid(row=0, column=_col, padx=4, sticky="nsew")
+        tk.Label(card, text=_plabel, bg="#f0efe9", fg=UI_SUB, font=("Segoe UI", 9),
+                 anchor="w").pack(fill="x", padx=10, pady=(8, 0))
+        tk.Label(card, text=_fmt_words(_d["words"]), bg="#f0efe9", fg=UI_ACCENT,
+                 font=("Segoe UI", 20, "bold"), anchor="w").pack(fill="x", padx=10)
+        tk.Label(card, text="woorden", bg="#f0efe9", fg=UI_SUB, font=("Segoe UI", 9),
+                 anchor="w").pack(fill="x", padx=10)
+        tk.Label(card, text="⏱ " + _fmt_dur(_d["saved_sec"]) + " bespaard", bg="#f0efe9",
+                 fg=UI_INK, font=("Segoe UI", 9, "bold"), anchor="w").pack(
+                 fill="x", padx=10, pady=(6, 8))
+
+    tk.Label(sta, text=f"Bespaarde tijd: typen (~{dictate.TYPING_WPM} wpm) vs. spreken "
+                       f"(~{dictate.SPEAKING_WPM} wpm).",
+             bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 8), anchor="w").pack(
+             fill="x", padx=20, pady=(8, 0))
+
+    divider(sta)
+    section(sta, "Per functie  (woorden)")
+    if _usage["all"]["words"] <= 0:
+        tk.Label(sta, text="Nog geen dictaten — begin met praten en je cijfers verschijnen hier.",
+                 bg=UI_PAPER, fg=UI_SUB, font=UI_FONT, anchor="w").pack(fill="x", padx=20, pady=(6, 0))
+    else:
+        _hr = tk.Frame(sta, bg=UI_PAPER); _hr.pack(fill="x", padx=20, pady=(2, 2))
+        tk.Label(_hr, text="", bg=UI_PAPER, width=20, anchor="w").pack(side="left")
+        for _ct in ("7 dgn", "maand", "jaar"):
+            tk.Label(_hr, text=_ct, bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 8, "bold"),
+                     width=9, anchor="e").pack(side="left")
+        _kinds = sorted(_usage["all"]["by_kind"], key=lambda k: -_usage["all"]["by_kind"][k])
+        for _k in _kinds:
+            _r = tk.Frame(sta, bg=UI_PAPER); _r.pack(fill="x", padx=20, pady=1)
+            tk.Label(_r, text=_kind_label(_k), bg=UI_PAPER, fg=UI_INK, font=("Segoe UI", 9),
+                     width=20, anchor="w").pack(side="left")
+            for _pk in ("7d", "30d", "365d"):
+                tk.Label(_r, text=_fmt_words(_usage[_pk]["by_kind"].get(_k, 0)), bg=UI_PAPER,
+                         fg=UI_INK, font=("Segoe UI", 9), width=9, anchor="e").pack(side="left")
 
     # ── TAB: Abonnement ───────────────────────────────────────────────────
     ab = tab_frames["abonnement"]
@@ -1566,6 +1667,7 @@ def open_dashboard(start_tab="instellingen"):
         rec["hk"] = _dropdown(tk, rowf, "Sneltoets", HOTKEY_CHOICES, hotkey or "uit")
         tk.Frame(rowf, bg="#f0efe9", height=6).pack()
         modes_rows.append(rec)
+        _bind_wheel(rowf, tab_canvas["modi"])   # muiswiel ook op nieuwe rij
 
     for _m in dictate.load_modes():
         _add_mode_row(_m.get("name", ""), _m.get("instruction", ""), _m.get("hotkey", "uit") or "uit")
@@ -1718,6 +1820,8 @@ def open_dashboard(start_tab="instellingen"):
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
+    for _tid, _cv in tab_canvas.items():   # muiswiel-scroll op alle tab-inhoud
+        _bind_wheel(tab_frames[_tid], _cv)
     show_tab(start_tab)
     root.mainloop()
 
@@ -1836,9 +1940,9 @@ def _install_update(new_version: str, parent_window=None):
         mb.showerror("Update mislukt", str(e))
 
 
-def _run_settings_window():
-    """Achterwaartse compatibiliteit: opent het dashboard op de instellingen-tab."""
-    open_dashboard("instellingen")
+def _run_settings_window(tab="instellingen"):
+    """Opent het dashboard op de gevraagde tab."""
+    open_dashboard(tab)
 
 
 def _reload_from_env():
@@ -1879,6 +1983,19 @@ def open_settings(icon_=None, item=None):
         threading.Thread(target=_mac, daemon=True).start()
         return
     threading.Thread(target=_run_settings_window, daemon=True).start()
+
+
+def open_stats(icon_=None, item=None):
+    """Opent het dashboard op de Statistieken-tab."""
+    if IS_MAC:
+        def _mac():
+            import subprocess
+            proc = subprocess.Popen([sys.executable, "--stats"])
+            proc.wait()
+            _reload_from_env()
+        threading.Thread(target=_mac, daemon=True).start()
+        return
+    threading.Thread(target=lambda: _run_settings_window("statistieken"), daemon=True).start()
 
 
 def run_onboarding():
@@ -2372,6 +2489,7 @@ def build_menu():
         pystray.MenuItem("Overlay-balkje tonen", toggle_overlay,
                          checked=lambda item: state["overlay"]),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Statistieken…", open_stats),
         pystray.MenuItem("Instellingen…", open_settings),
         pystray.MenuItem("Abonnement-sleutel invoeren…", set_license_action),
         pystray.MenuItem("API-key instellen…", set_key_action),
@@ -2658,6 +2776,10 @@ def main():
 
     if "--settings" in sys.argv:
         _run_settings_window()
+        return
+
+    if "--stats" in sys.argv:
+        _run_settings_window("statistieken")
         return
 
     if "--selftest" in sys.argv:

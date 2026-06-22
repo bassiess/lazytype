@@ -190,6 +190,84 @@ def save_modes(modes: list):
     MODES_FILE.write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# ── Gebruiksstatistiek (woorden gedicteerd + bespaarde tijd) ────────────
+# Elk geslaagd dictaat wordt als één regel JSON gelogd: {"t": epoch, "n": woorden, "k": soort}.
+USAGE_FILE = ROOT / "usage.jsonl"
+TYPING_WPM   = 40    # gemiddeld typtempo (woorden/min)
+SPEAKING_WPM = 150   # effectief spreektempo met Lazytype (woorden/min)
+
+
+def _count_words(text: str) -> int:
+    return len([w for w in (text or "").split() if w.strip()])
+
+
+def record_usage(text: str, kind: str = "dictaat"):
+    """Log één dictaat-event (tijd, aantal woorden, soort) voor de statistieken."""
+    try:
+        import json
+        n = _count_words(text)
+        if n <= 0:
+            return
+        line = json.dumps({"t": int(time.time()), "n": n, "k": kind or "dictaat"},
+                          ensure_ascii=False)
+        with open(USAGE_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+
+def load_usage() -> list:
+    out = []
+    try:
+        import json
+        with open(USAGE_FILE, "r", encoding="utf-8") as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln:
+                    continue
+                try:
+                    d = json.loads(ln)
+                    if isinstance(d, dict) and "t" in d and "n" in d:
+                        out.append(d)
+                except Exception:
+                    pass
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+    return out
+
+
+def usage_summary(now: int = 0) -> dict:
+    """Aggregaten per periode (7d/30d/365d/all): totaal woorden, per soort, bespaarde tijd (sec)."""
+    now = int(now or time.time())
+    events = load_usage()
+    spans = {"7d": 7 * 86400, "30d": 30 * 86400, "365d": 365 * 86400}
+    res = {p: {"words": 0, "by_kind": {}} for p in spans}
+    res["all"] = {"words": 0, "by_kind": {}}
+
+    def _add(bucket, k, n):
+        bucket["words"] += n
+        bucket["by_kind"][k] = bucket["by_kind"].get(k, 0) + n
+
+    for e in events:
+        age = now - int(e.get("t", 0))
+        n = int(e.get("n", 0))
+        k = str(e.get("k", "dictaat")) or "dictaat"
+        if n <= 0:
+            continue
+        _add(res["all"], k, n)
+        for p, span in spans.items():
+            if 0 <= age <= span:
+                _add(res[p], k, n)
+
+    for p in list(spans) + ["all"]:
+        w = res[p]["words"]
+        saved_min = w * (1.0 / TYPING_WPM - 1.0 / SPEAKING_WPM)   # typtijd − spreektijd
+        res[p]["saved_sec"] = max(0, int(saved_min * 60))
+    return res
+
+
 # ── Abonnement & 14-daagse proef ────────────────────────────────────────
 TRIAL_DAYS = 14
 
