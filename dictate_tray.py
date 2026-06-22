@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.7.0"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -1775,17 +1775,15 @@ def _install_update(new_version: str, parent_window=None):
             'copy /y "%SRC%" "%DST%" >nul 2>&1\r\n'
             "if errorlevel 1 goto retry\r\n"        # exe nog vergrendeld → opnieuw proberen
             ":launch\r\n"
-            # KRITIEK: wis de PyInstaller-onefile env-vars vóór de herstart. De cmd
-            # erfde ze van het oude proces; zonder wissen pakt de NIEUWE exe ze over en
-            # zoekt zijn DLL in de OUDE (opgeruimde) _MEI-map → "Failed to load Python
-            # DLL ...python3xx.dll". Wissen → nieuwe exe pakt fris uit naar een nieuwe map.
-            'set "_MEIPASS2="\r\n'
-            'set "_PYI_APPLICATION_HOME_DIR="\r\n'
-            'set "_PYI_ARCHIVE_FILE="\r\n'
-            'set "_PYI_PARENT_PROCESS_LEVEL="\r\n'
-            # GEEN _MEI-sweep hier (die verwijderde een nog gebruikte map). Opruimen
-            # gebeurt veilig bij het opstarten via _cleanup_stale_mei.
-            'start "" "%DST%"\r\n'
+            # Start via PowerShell met -UseNewEnvironment: de nieuwe exe krijgt een
+            # VOLLEDIG SCHONE omgeving vanuit het Windows-register (user + system),
+            # zonder enige geërfde process-level vars. "set _MEIPASS2=" in cmd werkte
+            # niet omdat _clean_env de var al had verwijderd: set creëerde dan een
+            # lege var ("") i.p.v. hem te wissen, waardoor de PyInstaller-bootloader
+            # de var wél zag (non-NULL) en probeerde de DLL uit de oude _MEI-map te
+            # laden → "Failed to load Python DLL". $env:DST leest de batch-var DST
+            # inclusief eventuele spaties in het pad.
+            'powershell -noprofile -windowstyle hidden -command "Start-Process -FilePath $env:DST -UseNewEnvironment"\r\n'
             'del "%SRC%" >nul 2>&1\r\n'
             'del "%~f0" >nul 2>&1\r\n',
             encoding="ascii")
@@ -1892,8 +1890,10 @@ def run_onboarding():
     root.attributes("-topmost", True)
     root.resizable(False, False)
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-    W, H = 480, 510
+    W, H = 500, 560
     root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
+    try: root.attributes("-alpha", 0.0)   # voor de fade-in
+    except Exception: pass
     body = tk.Frame(root, bg=UI_PAPER)
     body.pack(fill="both", expand=True)
     sel = {"d": state["hotkey_name"], "t": state["hotkey_translate"],
@@ -1905,9 +1905,71 @@ def run_onboarding():
     ]
     # "Translate to" gebruikt de volledige talenlijst (TRANSLATE_TO_CHOICES, globaal).
 
+    # ── Animatie-infra ────────────────────────────────────────────────────
+    _anim_ids = []
+
+    def _after(ms, fn):
+        aid = root.after(ms, fn)
+        _anim_ids.append(aid)
+        return aid
+
     def clear():
+        while _anim_ids:   # lopende animaties stoppen vóór we de stap wisselen
+            try: root.after_cancel(_anim_ids.pop())
+            except Exception: pass
         for w in body.winfo_children():
             w.destroy()
+
+    def _fade_in(a=0.06):
+        try: root.attributes("-alpha", min(1.0, round(a, 2)))
+        except Exception: pass
+        if a < 1.0:
+            root.after(16, lambda: _fade_in(a + 0.08))
+    _fade_in()
+
+    def _waveform(parent, height=58, nbars=24):
+        """Geanimeerde merk-waveform (paarse staafjes die pulseren)."""
+        width = W - 48
+        cv = tk.Canvas(parent, width=width, height=height, bg=UI_PAPER, highlightthickness=0)
+        cv.pack(pady=(16, 2))
+        st = {"t": 0}
+        cy = height // 2
+        def draw():
+            if not cv.winfo_exists():
+                return
+            cv.delete("all")
+            for i in range(nbars):
+                x = 14 + i * ((width - 28) / (nbars - 1))
+                env = 0.35 + 0.65 * abs(math.sin(i * 0.55))
+                h = 3 + abs(math.sin(st["t"] * 0.16 + i * 0.45)) * (height * 0.42) * env
+                cv.create_line(x, cy - h, x, cy + h, fill=UI_ACCENT, width=3, capstyle="round")
+            st["t"] += 1
+            _after(45, draw)
+        draw()
+        return cv
+
+    def _typing(label, examples):
+        """Typ-animatie: typt elk voorbeeld uit, houdt vast, en gaat naar het volgende."""
+        st = {"ex": 0, "ch": 0, "phase": "type"}
+        def tick():
+            if not label.winfo_exists():
+                return
+            ex = examples[st["ex"]]
+            if st["phase"] == "type":
+                st["ch"] += 1
+                label.config(text=ex[:st["ch"]] + "▏")
+                if st["ch"] >= len(ex):
+                    st["phase"] = "hold"; _after(1500, tick)
+                else:
+                    _after(42, tick)
+            elif st["phase"] == "hold":
+                label.config(text=ex)
+                st["phase"] = "next"; _after(800, tick)
+            else:
+                st["ex"] = (st["ex"] + 1) % len(examples)
+                st["ch"] = 0; st["phase"] = "type"
+                _after(200, tick)
+        tick()
 
     def logo_row(step_n, total=5):
         hdr = tk.Frame(body, bg=UI_PAPER)
@@ -1971,43 +2033,48 @@ def run_onboarding():
 
         cur = sel["l"] if sel["l"] in dict(UI_LANG_CHOICES).values() else "en"
         select_lang(cur)
+        tk.Label(body, text="Speak 99+ languages — pick any of them later in Settings.",
+                 bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9), anchor="w").pack(
+                 fill="x", padx=24, pady=(12, 0))
         nav(None, "Continue →", s_welcome)
 
-    # ── Step 2: Welcome ───────────────────────────────────────────────────
+    # ── Step 2: Welcome (geanimeerd) ──────────────────────────────────────
     def s_welcome():
         clear()
         logo_row(2)
+        _waveform(body)            # geanimeerde merk-waveform
         head("Welcome to Lazytype",
-             "Hold a key, speak, and your words appear — in any app.")
+             "Hold a key, speak — your words appear in any app, cleaned up by AI.")
 
-        lang_name = LANG_DISPLAY.get(sel["l"], "your language")
-        get_name  = LANG_DISPLAY.get(sel["g"], "another language")
+        # Live "typende" demo die de features laat zien
+        demo = tk.Label(body, text="", bg="#f0efe9", fg=UI_INK, font=UI_MONO,
+                        anchor="w", justify="left", wraplength=W - 64, padx=12, pady=10)
+        demo.pack(fill="x", padx=24, pady=(10, 2))
+        _typing(demo, [
+            "Hold a key, speak — your words appear instantly.",
+            "AI removes filler words and fixes punctuation automatically.",
+            'Say "scratch that" to undo your last dictation.',
+            "Translate to 99 languages while you speak.",
+            'One-tap AI modes: "make this formal", "summarize".',
+        ])
 
         feats = [
-            ("♪", "Press & speak  (hold key while speaking)",
-             "Release to stop. Text appears instantly in your active app — "
-             "Word, Slack, Gmail, anywhere."),
-            ("⇄", "Translate as you speak",
-             f"Speak {lang_name} and instantly get {get_name} back — AI corrects grammar "
-             f"and phrasing so the result reads naturally, not like a machine translation.\n"
-             f"You'll choose the target language and set the key in step 4."),
-            ("⊞", "Works everywhere",
-             "Any text field on your computer — browser, editor, chat, email."),
+            ("♪", "Press & speak", "Hold the key, talk, release. Clean text in any app."),
+            ("⌘", "Commands & AI modes", "Edit by voice, or one-tap saved instructions."),
+            ("⇄", "Translate · 99 languages", "Speak one language, get another — AI-polished."),
         ]
-
         for icon_ch, title, desc in feats:
             row = tk.Frame(body, bg=UI_PAPER)
-            row.pack(fill="x", padx=24, pady=(10, 0))
-            icon_f = tk.Frame(row, bg="#eeedfe", width=34, height=34)
+            row.pack(fill="x", padx=24, pady=(8, 0))
+            icon_f = tk.Frame(row, bg="#eeedfe", width=30, height=30)
             icon_f.pack(side="left", anchor="n")
             icon_f.pack_propagate(False)
             tk.Label(icon_f, text=icon_ch, bg="#eeedfe", fg=UI_ACCENT,
-                     font=("Segoe UI", 13)).pack(expand=True)
+                     font=("Segoe UI", 12)).pack(expand=True)
             txt_f = tk.Frame(row, bg=UI_PAPER)
             txt_f.pack(side="left", fill="x", expand=True, padx=(10, 0))
             tk.Label(txt_f, text=title, bg=UI_PAPER, fg=UI_INK,
-                     font=("Segoe UI", 10, "bold"), anchor="w",
-                     justify="left").pack(fill="x")
+                     font=("Segoe UI", 10, "bold"), anchor="w", justify="left").pack(fill="x")
             tk.Label(txt_f, text=desc, bg=UI_PAPER, fg=UI_SUB,
                      font=("Segoe UI", 9), anchor="w", justify="left",
                      wraplength=W - 110).pack(fill="x")
@@ -2025,6 +2092,13 @@ def run_onboarding():
         tk.Label(body, text="Popular: Right Ctrl · Right Alt · F8 · F9 · Ctrl + Alt",
                  bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9),
                  anchor="w").pack(fill="x", padx=24, pady=(4, 0))
+        tip = tk.Frame(body, bg="#eeedfe")
+        tip.pack(fill="x", padx=24, pady=(14, 0))
+        tk.Label(tip, text="✨ Your speech is cleaned up by AI automatically (filler words, "
+                           "punctuation). Say \"scratch that\" to undo your last dictation. "
+                           "Tone even adapts to the app you're in.",
+                 bg="#eeedfe", fg=UI_INK, font=("Segoe UI", 9), justify="left",
+                 anchor="w", wraplength=W - 72, padx=12, pady=10).pack(fill="x")
         nav(s_welcome, "Next →", lambda: (sel.update(d=g()), s_transkey()))
 
     # ── Step 4: Translation key + target language ─────────────────────────
@@ -2084,6 +2158,11 @@ def run_onboarding():
         tk.Label(sum_f,
                  text=f"Translation key: {tr_name}  —  {lang_name} → {get_name}, AI-corrected",
                  bg="#f0efe9", fg=UI_INK, font=("Segoe UI", 9),
+                 anchor="w", padx=10, pady=4).pack(fill="x")
+        tk.Frame(sum_f, bg="#dedbd3", height=1).pack(fill="x", padx=10)
+        tk.Label(sum_f,
+                 text="More in Settings: AI modes (hotkeys), realtime preview, command mode.",
+                 bg="#f0efe9", fg=UI_SUB, font=("Segoe UI", 9),
                  anchor="w", padx=10, pady=4).pack(fill="x")
 
         tk.Frame(body, bg="#dedbd3", height=1).pack(fill="x", padx=24, pady=(12, 6))
