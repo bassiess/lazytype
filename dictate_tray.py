@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.8.1"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -806,7 +806,7 @@ def short_last():
 # ── Automatisch starten bij inloggen (Windows: register · macOS: LaunchAgent) ──
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 APP_NAME = "Lazytype"
-LAUNCH_AGENT = Path.home() / "Library" / "LaunchAgents" / "com.lazytype.plist"
+LAUNCH_AGENT = dictate._user_home() / "Library" / "LaunchAgents" / "com.lazytype.plist"
 
 
 def autostart_supported():
@@ -1879,15 +1879,14 @@ def _install_update(new_version: str, parent_window=None):
             'copy /y "%SRC%" "%DST%" >nul 2>&1\r\n'
             "if errorlevel 1 goto retry\r\n"        # exe nog vergrendeld → opnieuw proberen
             ":launch\r\n"
-            # Start via PowerShell met -UseNewEnvironment: de nieuwe exe krijgt een
-            # VOLLEDIG SCHONE omgeving vanuit het Windows-register (user + system),
-            # zonder enige geërfde process-level vars. "set _MEIPASS2=" in cmd werkte
-            # niet omdat _clean_env de var al had verwijderd: set creëerde dan een
-            # lege var ("") i.p.v. hem te wissen, waardoor de PyInstaller-bootloader
-            # de var wél zag (non-NULL) en probeerde de DLL uit de oude _MEI-map te
-            # laden → "Failed to load Python DLL". $env:DST leest de batch-var DST
-            # inclusief eventuele spaties in het pad.
-            'powershell -noprofile -windowstyle hidden -command "Start-Process -FilePath $env:DST -UseNewEnvironment"\r\n'
+            # Start via PowerShell ZONDER -UseNewEnvironment: de nieuwe exe erft de
+            # omgeving van deze cmd, die al draait met _clean_env (Popen env=) — dus
+            # de PyInstaller-onefile-vars (_PYI_*/_MEIPASS2) zijn weg (verse uitpak,
+            # geen "Failed to load Python DLL"), MAAR USERPROFILE/APPDATA blijven
+            # behouden. -UseNewEnvironment bouwde de omgeving uit het register en liet
+            # USERPROFILE/APPDATA weg → Path.home() crashte met "Could not determine
+            # home directory". $env:DST leest de batch-var DST incl. spaties in 't pad.
+            'powershell -noprofile -windowstyle hidden -command "Start-Process -FilePath $env:DST"\r\n'
             'del "%SRC%" >nul 2>&1\r\n'
             'del "%~f0" >nul 2>&1\r\n',
             encoding="ascii")

@@ -44,12 +44,37 @@ for _stream in (sys.stdout, sys.stderr):
 
 # Persistente opslag: AppData op Windows, ~/.config/Lazytype op macOS.
 # Bij frozen exe: migreer .env naast de exe naar AppData als die al bestaat.
+def _user_home() -> Path:
+    """Home-map robuust bepalen. Path.home() crasht ('Could not determine home
+    directory') als HOME/USERPROFILE ontbreekt — wat gebeurt bij een 'schone'
+    relaunch-omgeving direct na een update. Daarom met fallbacks."""
+    try:
+        return Path.home()
+    except Exception:
+        for _v in ("USERPROFILE", "HOME"):
+            _p = os.environ.get(_v)
+            if _p:
+                return Path(_p)
+        _hd, _hp = os.environ.get("HOMEDRIVE"), os.environ.get("HOMEPATH")
+        if _hd and _hp:
+            return Path(_hd + _hp)
+        import tempfile
+        return Path(tempfile.gettempdir())   # laatste redmiddel — nooit crashen
+
+
 if getattr(sys, "frozen", False):
     if IS_WIN:
-        ROOT = Path(os.environ.get("APPDATA", Path.home())).expanduser() / "Lazytype"
+        _appdata = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
+        _base = Path(_appdata).expanduser() if _appdata else (_user_home() / "AppData" / "Roaming")
+        ROOT = _base / "Lazytype"
     else:
-        ROOT = Path.home() / ".config" / "Lazytype"
-    ROOT.mkdir(parents=True, exist_ok=True)
+        ROOT = _user_home() / ".config" / "Lazytype"
+    try:
+        ROOT.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        import tempfile
+        ROOT = Path(tempfile.gettempdir()) / "Lazytype"   # onschrijfbare APPDATA → temp
+        ROOT.mkdir(parents=True, exist_ok=True)
     _old_env = Path(sys.executable).resolve().parent / ".env"
     if _old_env.exists() and not (ROOT / ".env").exists():
         # Migreer alleen API-keys/device, nooit onboarding-staat of hotkey-prefs.
@@ -274,11 +299,11 @@ TRIAL_DAYS = 14
 
 def _config_dir() -> Path:
     if IS_WIN:
-        base = Path(os.environ.get("APPDATA") or Path.home())
+        base = Path(os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or _user_home())
     elif IS_MAC:
-        base = Path.home() / "Library" / "Application Support"
+        base = _user_home() / "Library" / "Application Support"
     else:
-        base = Path.home() / ".config"
+        base = _user_home() / ".config"
     return base / "Lazytype"
 
 
