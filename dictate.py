@@ -44,6 +44,27 @@ for _stream in (sys.stdout, sys.stderr):
 
 # Persistente opslag: AppData op Windows, ~/.config/Lazytype op macOS.
 # Bij frozen exe: migreer .env naast de exe naar AppData als die al bestaat.
+def _win_appdata() -> str:
+    """Echte %APPDATA% (Roaming) via de Windows-API — werkt óók als de APPDATA/
+    USERPROFILE-env-vars ontbreken (bijv. na een update-relaunch met een schone
+    omgeving). Gebruikt het token van de huidige gebruiker, dus altijd het juiste
+    profiel → config (licentie!) blijft behouden over zo'n relaunch heen."""
+    if not IS_WIN:
+        return ""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        CSIDL_APPDATA = 0x001A
+        SHGFP_TYPE_CURRENT = 0
+        buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+        fn = ctypes.windll.shell32.SHGetFolderPathW
+        if fn(None, CSIDL_APPDATA, None, SHGFP_TYPE_CURRENT, buf) == 0 and buf.value:
+            return buf.value
+    except Exception:
+        pass
+    return ""
+
+
 def _user_home() -> Path:
     """Home-map robuust bepalen. Path.home() crasht ('Could not determine home
     directory') als HOME/USERPROFILE ontbreekt — wat gebeurt bij een 'schone'
@@ -64,7 +85,9 @@ def _user_home() -> Path:
 
 if getattr(sys, "frozen", False):
     if IS_WIN:
-        _appdata = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
+        # Echte AppData eerst via de Windows-API (overleeft een schone relaunch),
+        # dan de env-var, dan home/Roaming.
+        _appdata = _win_appdata() or os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
         _base = Path(_appdata).expanduser() if _appdata else (_user_home() / "AppData" / "Roaming")
         ROOT = _base / "Lazytype"
     else:
@@ -299,7 +322,7 @@ TRIAL_DAYS = 14
 
 def _config_dir() -> Path:
     if IS_WIN:
-        base = Path(os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or _user_home())
+        base = Path(_win_appdata() or os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or _user_home())
     elif IS_MAC:
         base = _user_home() / "Library" / "Application Support"
     else:
