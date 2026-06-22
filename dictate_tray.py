@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.4.0"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -126,8 +126,10 @@ state = {
     "enabled": True,
     "last": "",
     "last_dictation": "",   # laatste GESLAAGDE dictaat-tekst (voor command-op-laatste)
+    "last_paste_len": 0,    # lengte van de laatste paste (voor "scratch that"-undo)
     "busy": False,
     "history": dictate.HISTORY_ENABLED,   # dicteer-geschiedenis bewaren
+    "context": os.environ.get("DICTATE_CONTEXT", "1").lower() in ("1", "true", "yes", "on"),  # toon per app
     "overlay": os.environ.get("DICTATE_OVERLAY", "1").lower() in ("1", "true", "yes", "on"),
     "active_mode": "dictate",       # dictate | command | translate (welke flow loopt nu)
     "active_matchers": None,        # welke sneltoets(-combo) de huidige opname startte
@@ -366,6 +368,7 @@ def handle_release():
         set_phase("working")
         t0 = time.time()
         mode = state.get("active_mode")
+        ctx = active_app_context(state.get("target_hwnd", 0))   # toon-aanpassing per app
         if mode == "command":
             # Geselecteerde tekst heeft voorrang; is er niets geselecteerd, dan passen
             # we de gesproken instructie toe op het LAATSTE dictaat (command-op-laatste).
@@ -379,13 +382,13 @@ def handle_release():
         elif mode == "translate":
             state["last"] = "Transcriberen…"
             text = dictate.run_pipeline(wav, engine=state["engine"], language=state["language"],
-                                        postprocess=state["translate_target"])
+                                        postprocess=state["translate_target"], context=ctx)
         else:
             eng = state["engine"]
             pp  = state["postprocess"]
             if eng == "managed" or pp in ("off", ""):
                 text = dictate.run_pipeline(wav, engine=eng,
-                                            language=state["language"], postprocess=pp)
+                                            language=state["language"], postprocess=pp, context=ctx)
             else:
                 state["last"] = "Transcriberen…"
                 dictate.check_access(eng)
@@ -402,32 +405,45 @@ def handle_release():
             threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
             return
         print(f"  ✅ ({dt:.2f}s) → {text}")
-        state["last"] = text
-        state["last_dictation"] = text   # voor command-op-laatste (ook ketenen van edits)
         hwnd = state.get("target_hwnd", 0)
 
-        # Paste uitvoeren op de overlay-thread (Tkinter-mainloop = Win32 message queue
-        # aanwezig → SetForegroundWindow werkt hier wél, anders faalt het silently).
-        _paste_done = threading.Event()
+        # Stem-actie: "scratch that" → wis het vorige dictaat i.p.v. plakken.
+        is_undo = mode not in ("command", "translate") and dictate.voice_action(text) == "undo"
 
-        def _paste_on_tk():
+        # Output (plakken of wissen) op de overlay-thread (Win32 message queue aanwezig →
+        # SetForegroundWindow werkt hier; anders faalt focus-herstel silently).
+        _done = threading.Event()
+
+        def _output_on_tk():
             try:
                 _restore_focus(hwnd)
-                dictate.paste_text(text)
+                if is_undo:
+                    dictate.delete_last(state.get("last_paste_len", 0))
+                else:
+                    dictate.paste_text(text)
             except Exception as _e:
-                print(f"  ⚠️ paste: {_e}")
+                print(f"  ⚠️ output: {_e}")
             finally:
-                _paste_done.set()
+                _done.set()
 
         if dictate.IS_WIN and overlay_ui.root:
-            overlay_ui.root.after(0, _paste_on_tk)
-            _paste_done.wait(timeout=3.0)
+            overlay_ui.root.after(0, _output_on_tk)
+            _done.wait(timeout=8.0)
         else:
             _restore_focus(hwnd)
-            dictate.paste_text(text)
+            dictate.delete_last(state.get("last_paste_len", 0)) if is_undo else dictate.paste_text(text)
+
+        if is_undo:
+            state["last"] = "↶ ongedaan gemaakt"
+            state["last_dictation"] = ""
+            state["last_paste_len"] = 0
+        else:
+            state["last"] = text
+            state["last_dictation"] = text   # voor command-op-laatste (ook ketenen van edits)
+            state["last_paste_len"] = len(text) + (1 if dictate.TRAILING_SPACE and not text.endswith(" ") else 0)
 
         threading.Thread(target=lambda: dictate.beep("done"), daemon=True).start()
-        if state.get("history"):
+        if not is_undo and state.get("history"):
             dictate.add_history(text)
     except Exception as e:
         print(f"  ⚠️  {e}")
@@ -453,6 +469,77 @@ def _get_foreground_hwnd() -> int:
         except Exception:
             pass
     return 0
+
+
+# App-naam (lowercase) → context-categorie voor toon-aanpassing.
+_APP_CONTEXT = {
+    "outlook": "email", "thunderbird": "email", "mailspring": "email", "mail": "email",
+    "em client": "email", "spark": "email", "postbox": "email",
+    "slack": "chat", "discord": "chat", "whatsapp": "chat", "telegram": "chat",
+    "teams": "chat", "signal": "chat", "messages": "chat", "messenger": "chat",
+    "code": "code", "devenv": "code", "cursor": "code", "windsurf": "code",
+    "sublime_text": "code", "sublime text": "code", "pycharm": "code", "idea": "code",
+    "rider": "code", "webstorm": "code", "goland": "code", "clion": "code",
+    "xcode": "code", "terminal": "code", "iterm": "code", "powershell": "code",
+}
+
+
+def _proc_name_from_hwnd(hwnd: int) -> str:
+    """exe-basename (lowercase, zonder .exe) van het venster-proces (Windows)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        u32 = ctypes.windll.user32
+        k32 = ctypes.windll.kernel32
+        u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        k32.OpenProcess.restype = wintypes.HANDLE
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        k32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                                   wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        pid = wintypes.DWORD()
+        u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if not pid.value:
+            return ""
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+        if not h:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(512)
+            size = wintypes.DWORD(512)
+            if k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                return buf.value.rsplit("\\", 1)[-1].lower().replace(".exe", "")
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        pass
+    return ""
+
+
+def _mac_frontmost_app() -> str:
+    try:
+        out = subprocess.check_output(
+            ["osascript", "-e",
+             'tell application "System Events" to name of first process whose frontmost is true'],
+            text=True, timeout=2)
+        return out.strip().lower()
+    except Exception:
+        return ""
+
+
+def active_app_context(hwnd: int = 0) -> str:
+    """Context-categorie van de actieve app: 'email' | 'chat' | 'code' | '' (algemeen).
+    Stuurt niets als de toon-aanpassing uitstaat."""
+    if not state.get("context", True):
+        return ""
+    name = _proc_name_from_hwnd(hwnd) if dictate.IS_WIN else (_mac_frontmost_app() if dictate.IS_MAC else "")
+    if not name:
+        return ""
+    for token, cat in _APP_CONTEXT.items():
+        if token in name:
+            return cat
+    return ""
 
 
 def _restore_focus(hwnd: int):
@@ -1256,6 +1343,8 @@ def open_dashboard(start_tab="instellingen"):
         # Nabewerking & gedrag
         state["postprocess"] = g_pp()
         dictate.save_env_value("DICTATE_POSTPROCESS", state["postprocess"])
+        state["context"] = g_context()
+        dictate.save_env_value("DICTATE_CONTEXT", "1" if state["context"] else "0")
         new_overlay = g_overlay()
         if new_overlay != state["overlay"]:
             state["overlay"] = new_overlay
@@ -1296,6 +1385,7 @@ def open_dashboard(start_tab="instellingen"):
     divider(scr_frame)
     section(scr_frame, "Nabewerking & gedrag")
     g_pp = _dropdown(tk, scr_frame, "AI-nabewerking (normaal dictaat)", POSTPROC_CHOICES, state["postprocess"])
+    g_context = _checkbox(tk, scr_frame, "Context-bewuste toon (zakelijk in e-mail, casual in chat)", state["context"])
     g_overlay = _checkbox(tk, scr_frame, "Overlay-balkje tonen", state["overlay"])
     g_history = _checkbox(tk, scr_frame, "Dicteer-geschiedenis bewaren", state["history"])
     g_autostart = (_checkbox(tk, scr_frame, "Automatisch starten bij inloggen", is_autostart())
@@ -1353,6 +1443,7 @@ def open_dashboard(start_tab="instellingen"):
         ("Spreektaal", LANG_DISPLAY.get(state["language"], state["language"])),
         ("Vertaaldoel", LANG_DISPLAY.get(state["translate_target"], state["translate_target"])),
         ("AI-nabewerking", _pp_disp),
+        ("Context-toon", "aan" if state["context"] else "uit"),
         ("Dicteer-toets", _hk_display(state["hotkey_name"])),
         ("Command-toets", _hk_display(state["hotkey_command"])),
         ("Vertaal-toets", _hk_display(state["hotkey_translate"])),

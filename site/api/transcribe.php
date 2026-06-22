@@ -155,6 +155,7 @@ $language    = trim($_POST['language']    ?? 'auto');
 $prompt      = substr(trim($_POST['prompt']  ?? ''), 0, 500);
 $postprocess = trim($_POST['postprocess'] ?? 'off');
 $command     = substr(trim($_POST['command']  ?? ''), 0, 4000);
+$context     = trim($_POST['context']  ?? '');   // email | chat | code (toon-aanpassing)
 
 $valid_langs = ['auto','af','sq','am','ar','hy','as','az','ba','eu','be','bn','bs','br','bg',
                 'my','ca','zh','hr','cs','da','nl','en','et','fo','fi','fr','gl','ka','de',
@@ -276,6 +277,14 @@ $LANG_NAMES = [
     'vi' => 'Vietnamese', 'cy' => 'Welsh', 'yi' => 'Yiddish', 'yo' => 'Yoruba',
 ];
 
+// Toon-hint o.b.v. de actieve app (context-bewuste toon).
+$tone = '';
+if ($context === 'email') {
+    $tone = ' Use a professional, well-structured tone suitable for an email.';
+} elseif ($context === 'chat') {
+    $tone = ' Use a casual, concise, conversational tone suitable for a chat message.';
+}
+
 if ($text !== '') {
     if ($command !== '') {
         // Command-mode: gesproken tekst = instructie, $command = geselecteerde tekst
@@ -285,20 +294,23 @@ if ($text !== '') {
         $edited = groq_chat($system, "Instruction: {$text}\n\nText:\n{$command}");
         if ($edited !== null) { $text = $edited; }
     } elseif ($postprocess === 'clean') {
-        $system = 'You polish raw speech-to-text dictation. Remove filler words, false starts, '
-                . 'repetitions and stutters; fix punctuation, capitalization and obvious '
-                . 'mis-transcriptions. Keep the EXACT same language as the input — never '
-                . 'translate. Preserve the original meaning and tone. Do not add, summarize, '
-                . 'explain or answer anything. Output ONLY the cleaned text.';
-        $clean = groq_chat($system, $text);
-        if ($clean !== null) { $text = $clean; }
+        // In een code-editor: laat de tekst letterlijk (geen opschoning die symbolen verhaspelt).
+        if ($context !== 'code') {
+            $system = 'You polish raw speech-to-text dictation. Remove filler words, false starts, '
+                    . 'repetitions and stutters; fix punctuation, capitalization and obvious '
+                    . 'mis-transcriptions. Keep the EXACT same language as the input — never '
+                    . 'translate. Preserve the original meaning and tone. Do not add, summarize, '
+                    . 'explain or answer anything. Output ONLY the cleaned text.' . $tone;
+            $clean = groq_chat($system, $text);
+            if ($clean !== null) { $text = $clean; }
+        }
     } elseif ($postprocess !== '' && $postprocess !== 'off') {
         $target = $LANG_NAMES[$postprocess] ?? $postprocess;
         $system = "You post-process raw speech-to-text dictation. Translate it into {$target}. "
                 . 'Also clean it up: drop filler words, false starts and stutters, and fix '
                 . 'punctuation and capitalization so it reads naturally for a native speaker. '
                 . 'Preserve the original meaning and tone. Do not add, summarize, explain or '
-                . "answer anything. Output ONLY the final {$target} text, nothing else.";
+                . "answer anything. Output ONLY the final {$target} text, nothing else." . $tone;
         $translated = groq_chat($system, $text);
         if ($translated !== null) { $text = $translated; }
     }

@@ -511,7 +511,7 @@ def ensure_device_id() -> str:
 
 
 def transcribe_managed(wav_bytes: bytes, language: str = "auto", postprocess: str = "off",
-                       command: str = "") -> str:
+                       command: str = "", context: str = "") -> str:
     """Abonnement: stuur audio naar de Lazytype-proxy, die met de server-side
     Groq-key transcribeert én (optioneel) vertaalt/opschoont/command toepast."""
     import requests
@@ -526,6 +526,8 @@ def transcribe_managed(wav_bytes: bytes, language: str = "auto", postprocess: st
         data["prompt"] = prompt
     if command:
         data["command"] = command
+    if context:
+        data["context"] = context
     r = requests.post(
         os.environ.get("LAZYTYPE_API", API_URL),
         files={"file": ("audio.wav", wav_bytes, "audio/wav")},
@@ -557,10 +559,43 @@ def transcribe(wav_bytes: bytes, engine: str = ENGINE, language: str = LANGUAGE)
 NEWLINE_COMMANDS = {
     "nieuwe regel": "\n",
     "volgende regel": "\n",
+    "new line": "\n",
     "enter": "\n",
     "nieuwe alinea": "\n\n",
     "nieuwe paragraaf": "\n\n",
+    "new paragraph": "\n\n",
 }
+
+# Gesproken ACTIES (geen tekst): wis het vorige dictaat.
+UNDO_COMMANDS = {"scratch that", "verwijder dat", "wis dat", "schrap dat",
+                 "delete that", "wis dit"}
+
+
+def voice_action(text: str):
+    """Herken een gesproken actie. Geeft 'undo' om het vorige dictaat te wissen, anders None."""
+    key = re.sub(r"[.,!?]+$", "", (text or "").strip().lower()).strip()
+    return "undo" if key in UNDO_COMMANDS else None
+
+
+def delete_last(n: int):
+    """Stuur n keer Backspace — wist het zojuist geplakte dictaat ('scratch that')."""
+    if n <= 0:
+        return
+    n = min(int(n), 2000)   # veiligheidslimiet
+    if IS_WIN:
+        import ctypes
+        u32 = ctypes.windll.user32
+        VK_BACK, KEYEVENTF_UP = 0x08, 0x0002
+        for _ in range(n):
+            u32.keybd_event(VK_BACK, 0, 0, 0)
+            u32.keybd_event(VK_BACK, 0, KEYEVENTF_UP, 0)
+            time.sleep(0.003)
+    else:
+        from pynput.keyboard import Controller, Key
+        kb = Controller()
+        for _ in range(n):
+            kb.press(Key.backspace); kb.release(Key.backspace)
+            time.sleep(0.003)
 
 
 def _literal_expansion(text: str):
@@ -661,15 +696,16 @@ def postprocess_text(text: str, mode: str = None) -> str:
 
 # ── Volledige pijplijn: transcriberen → afronden → nabewerken ───────────
 def run_pipeline(wav_bytes: bytes, engine: str = None, language: str = None,
-                 postprocess: str = None) -> str:
+                 postprocess: str = None, context: str = "") -> str:
     """Eén ingang voor alle aanroepers (daemon, CLI, tray). Bij de managed-engine
-    doet de server het nabewerken; anders gebeurt dat lokaal."""
+    doet de server het nabewerken; anders gebeurt dat lokaal.
+    context = categorie van de actieve app (email/chat/code) voor toon-aanpassing."""
     engine = engine or ENGINE
     check_access(engine)
     language = language if language is not None else LANGUAGE
     mode = (postprocess if postprocess is not None else POSTPROCESS) or "off"
     if engine == "managed":
-        return finalize_text(transcribe_managed(wav_bytes, language, mode))
+        return finalize_text(transcribe_managed(wav_bytes, language, mode, context=context))
     raw = transcribe(wav_bytes, engine, language)
     if _literal_expansion(raw) is not None:
         return finalize_text(raw)          # commando/snippet → letterlijk, geen nabewerking
