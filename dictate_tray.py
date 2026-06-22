@@ -44,8 +44,26 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.2"
+APP_VERSION = "1.8.3"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
+
+# Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
+_STATS_URL = "https://lazytype.com/api/stats.php"
+_STATS_KEY  = "lt_stats_K9mQ2wX4bR8t2026"
+
+
+def _report_words(n: int) -> None:
+    """Stuur woordtelling naar de live-ticker — silently, op achtergrondthread."""
+    if n < 1:
+        return
+    try:
+        import json as _j, urllib.request as _ur
+        payload = _j.dumps({"key": _STATS_KEY, "words": n}).encode()
+        req = _ur.Request(_STATS_URL, data=payload,
+                          headers={"Content-Type": "application/json"}, method="POST")
+        _ur.urlopen(req, timeout=5)
+    except Exception:
+        pass
 
 
 def _check_update():
@@ -450,6 +468,7 @@ def handle_release():
             state["last_paste_len"] = len(text) + (1 if dictate.TRAILING_SPACE and not text.endswith(" ") else 0)
             _kind = "command" if mode == "command" else "vertalen" if mode == "translate" else "dictaat"
             dictate.record_usage(text, _kind)   # statistiek bijwerken
+            threading.Thread(target=lambda t=text: _report_words(len(t.split())), daemon=True).start()
 
         threading.Thread(target=lambda: dictate.beep("done"), daemon=True).start()
         if not is_undo and state.get("history"):
@@ -1631,12 +1650,36 @@ def open_dashboard(start_tab="instellingen"):
                  "# trigger = uit te vouwen tekst\n# bijv:  mijn agenda = https://calendly.com/bas\n")
 
     # ── TAB: Modi (AI-modi met eigen sneltoets) ───────────────────────────
+    def _ph_entry(parent, placeholder, value="", **kw):
+        """tk.Entry met grijze voorbeeldtekst (placeholder) zolang 'ie leeg is.
+        Geeft (widget, getter) terug; de getter levert "" als alleen de
+        voorbeeldtekst nog staat."""
+        e = tk.Entry(parent, fg=UI_INK, **kw)
+        st = {"ph": False}
+        def _show():
+            e.delete(0, "end"); e.insert(0, placeholder); e.config(fg="#9a978f"); st["ph"] = True
+        def _clear():
+            if st["ph"]:
+                e.delete(0, "end"); e.config(fg=UI_INK); st["ph"] = False
+        e.bind("<FocusIn>", lambda _e: _clear())
+        e.bind("<FocusOut>", lambda _e: (None if e.get() else _show()))
+        if value:
+            e.insert(0, value)
+        else:
+            _show()
+        return e, (lambda: "" if st["ph"] else e.get().strip())
+
     md2 = tab_frames["modi"]
     section(md2, "AI-modi")
-    tk.Label(md2, text="Sla een instructie op met een eigen sneltoets. Toets indrukken past de "
-                       "instructie toe op je selectie — of, als je niets selecteert, op je laatste dictaat.",
+    tk.Label(md2, text="Een AI-modus is een opgeslagen instructie met een eigen sneltoets. "
+                       "Selecteer wat tekst (of gebruik je laatste dictaat), druk de sneltoets, "
+                       "en de AI bewerkt die tekst volgens jouw instructie — zónder te praten.",
              bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9), justify="left",
-             anchor="w", wraplength=W - 48).pack(fill="x", padx=20)
+             anchor="w", wraplength=W - 48).pack(fill="x", padx=20, pady=(0, 2))
+    tk.Label(md2, text="Voorbeelden: “maak deze tekst formeel” · “vat samen in 3 bullets” · "
+                       "“vertaal naar het Engels” · “corrigeer spelling en grammatica”.",
+             bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 8, "italic"), justify="left",
+             anchor="w", wraplength=W - 48).pack(fill="x", padx=20, pady=(0, 2))
 
     modes_rows = []
     modes_container = tk.Frame(md2, bg=UI_PAPER)
@@ -1647,11 +1690,14 @@ def open_dashboard(start_tab="instellingen"):
         rowf.pack(fill="x", padx=20, pady=(8, 0))
         top = tk.Frame(rowf, bg="#f0efe9")
         top.pack(fill="x", padx=8, pady=(8, 0))
-        nm = tk.StringVar(value=name)
-        tk.Entry(top, textvariable=nm, font=("Segoe UI", 10, "bold"), relief="flat", bg="#ffffff",
-                 fg=UI_INK, insertbackground=UI_INK, highlightthickness=1,
-                 highlightbackground="#dedbd3").pack(side="left", fill="x", expand=True, ipady=3)
-        rec = {"name": nm}
+        tk.Label(top, text="Naam", bg="#f0efe9", fg=UI_SUB,
+                 font=("Segoe UI", 8)).pack(side="left", padx=(0, 6))
+        nm_e, nm_get = _ph_entry(top, "Formele e-mail", value=name,
+                                 font=("Segoe UI", 10, "bold"), relief="flat", bg="#ffffff",
+                                 insertbackground=UI_INK, highlightthickness=1,
+                                 highlightbackground="#dedbd3")
+        nm_e.pack(side="left", fill="x", expand=True, ipady=3)
+        rec = {"name": nm_get}
 
         def _rm():
             rowf.destroy()
@@ -1659,12 +1705,18 @@ def open_dashboard(start_tab="instellingen"):
                 modes_rows.remove(rec)
         tk.Button(top, text="✕", command=_rm, bg="#f0efe9", fg=UI_SUB, relief="flat",
                   bd=0, cursor="hand2", font=("Segoe UI", 10)).pack(side="left", padx=(6, 0))
-        instr = tk.StringVar(value=instruction)
-        tk.Entry(rowf, textvariable=instr, font=UI_FONT, relief="flat", bg="#ffffff", fg=UI_INK,
-                 insertbackground=UI_INK, highlightthickness=1, highlightbackground="#dedbd3").pack(
-                 fill="x", ipady=3, padx=8, pady=(4, 0))
-        rec["instr"] = instr
-        rec["hk"] = _dropdown(tk, rowf, "Sneltoets", HOTKEY_CHOICES, hotkey or "uit")
+
+        tk.Label(rowf, text="Instructie — wat moet de AI met je tekst doen?",
+                 bg="#f0efe9", fg=UI_SUB, font=("Segoe UI", 8), anchor="w").pack(
+                 fill="x", padx=8, pady=(6, 0))
+        instr_e, instr_get = _ph_entry(rowf, "Herschrijf deze tekst professioneel, foutloos en beknopt",
+                                       value=instruction, font=UI_FONT, relief="flat", bg="#ffffff",
+                                       insertbackground=UI_INK, highlightthickness=1,
+                                       highlightbackground="#dedbd3")
+        instr_e.pack(fill="x", ipady=3, padx=8, pady=(2, 0))
+        rec["instr"] = instr_get
+        rec["hk"] = _dropdown(tk, rowf, "Sneltoets (de toets die deze modus activeert)",
+                              HOTKEY_CHOICES, hotkey or "uit")
         tk.Frame(rowf, bg="#f0efe9", height=6).pack()
         modes_rows.append(rec)
         _bind_wheel(rowf, tab_canvas["modi"])   # muiswiel ook op nieuwe rij
@@ -1678,10 +1730,10 @@ def open_dashboard(start_tab="instellingen"):
     def _save_modes():
         out = []
         for r in modes_rows:
-            instr = r["instr"].get().strip()
+            instr = r["instr"]().strip()
             if not instr:
                 continue
-            out.append({"name": r["name"].get().strip(), "instruction": instr, "hotkey": r["hk"]()})
+            out.append({"name": r["name"]().strip(), "instruction": instr, "hotkey": r["hk"]()})
         # Sneltoetsen mogen niet botsen met dicteren/command/vertalen of elkaar.
         hks = [m["hotkey"] for m in out if m["hotkey"] and m["hotkey"] != "uit"]
         base = [state["hotkey_name"], state["hotkey_command"], state["hotkey_translate"]]
@@ -2171,12 +2223,13 @@ def run_onboarding():
             "AI removes filler words and fixes punctuation automatically.",
             'Say "scratch that" to undo your last dictation.',
             "Translate to 99 languages while you speak.",
-            'One-tap AI modes: "make this formal", "summarize".',
+            'AI modes: select text, press a hotkey, let AI rewrite it.',
         ])
 
         feats = [
             ("♪", "Press & speak", "Hold the key, talk, release. Clean text in any app."),
-            ("⌘", "Commands & AI modes", "Edit by voice, or one-tap saved instructions."),
+            ("⌘", "AI modes", "Save an instruction under a hotkey (e.g. “make formal”). "
+             "Select text, press the key — AI rewrites it for you. Set them up later in Settings → Modi."),
             ("⇄", "Translate · 99 languages", "Speak one language, get another — AI-polished."),
         ]
         for icon_ch, title, desc in feats:
