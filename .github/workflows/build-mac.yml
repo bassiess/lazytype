@@ -35,6 +35,28 @@ jobs:
             --hidden-import pynput.mouse._darwin \
             dictate_tray.py
 
+      - name: Info.plist aanvullen (mic-permissie, versie) + ad-hoc her-signeren
+        run: |
+          PLIST="dist/Lazytype.app/Contents/Info.plist"
+          VERSION=$(python -c "import json;print(json.load(open('site/version.json'))['version'])")
+          PB=/usr/libexec/PlistBuddy
+          # Microfoon-toestemming: ZONDER deze sleutel weigert/kilt macOS (TCC) de app
+          # zodra hij de microfoon opent → dicteren werkt niet op Mac.
+          $PB -c "Delete :NSMicrophoneUsageDescription" "$PLIST" 2>/dev/null || true
+          $PB -c "Add :NSMicrophoneUsageDescription string 'Lazytype gebruikt je microfoon om je spraak om te zetten naar tekst.'" "$PLIST"
+          # Apple Events: voor context-bewuste toon (osascript leest de actieve app).
+          $PB -c "Delete :NSAppleEventsUsageDescription" "$PLIST" 2>/dev/null || true
+          $PB -c "Add :NSAppleEventsUsageDescription string 'Lazytype stemt de schrijfstijl af op de app waarin je dicteert.'" "$PLIST"
+          # Versienummer (stond op 0.0.0 in de crash-reports).
+          $PB -c "Set :CFBundleShortVersionString $VERSION" "$PLIST" 2>/dev/null || $PB -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST"
+          $PB -c "Set :CFBundleVersion $VERSION" "$PLIST" 2>/dev/null || $PB -c "Add :CFBundleVersion string $VERSION" "$PLIST"
+          plutil -lint "$PLIST"
+          # Info.plist gewijzigd → ad-hoc handtekening opnieuw zetten (anders ongeldig).
+          codesign --force --deep --sign - dist/Lazytype.app
+          codesign --verify --deep --strict dist/Lazytype.app && echo "codesign OK"
+          echo "Mic-key: $($PB -c 'Print :NSMicrophoneUsageDescription' "$PLIST")"
+          echo "Versie:  $($PB -c 'Print :CFBundleShortVersionString' "$PLIST")"
+
       - name: Smoke-test gebouwde app
         run: dist/Lazytype.app/Contents/MacOS/Lazytype --selftest
 

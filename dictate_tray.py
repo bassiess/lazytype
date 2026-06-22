@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.7"
+APP_VERSION = "1.8.8"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).

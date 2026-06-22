@@ -134,13 +134,14 @@ ENGINE = os.environ.get("DICTATE_ENGINE", "groq").lower()
 
 # Platform-specifieke standaard sneltoetsen.
 # Windows: Ctrl+Win = dicteren, Ctrl = command, Win+Alt = vertalen (weinig conflicten).
-# Mac: Rechter Ctrl = dicteren, Rechter Shift = command, Rechter Option = vertalen.
-#   (De Windows/Cmd-toets wordt op Mac bewust NIET gebruikt. Command stond eerder óók
-#    op Rechter Option → botste met vertalen, waardoor de vertaaltoets nooit werkte;
-#    command is daarom verplaatst naar Rechter Shift.)
-_DEFAULT_HOTKEY           = "ctrl+win" if IS_WIN else "ctrl_r"
+# Mac: Rechter Option = dicteren, Rechter Shift = command, Ctrl+Option = vertalen.
+#   BELANGRIJK: de meeste Mac-toetsenborden (MacBook, Magic Keyboard) hebben GEEN
+#   rechter Ctrl-toets → een 'ctrl_r'-default is onindrukbaar en lijkt "doet niks".
+#   Rechter Option (alt_r) bestaat wél overal en is veilig vast te houden (Option
+#   alléén typt niets). De Cmd-toets wordt bewust niet gebruikt (botst met shortcuts).
+_DEFAULT_HOTKEY           = "ctrl+win" if IS_WIN else "alt_r"
 _DEFAULT_COMMAND_HOTKEY   = "ctrl_r"   if IS_WIN else "shift_r"
-_DEFAULT_TRANSLATE_HOTKEY = "win+alt"  if IS_WIN else "alt_r"
+_DEFAULT_TRANSLATE_HOTKEY = "win+alt"  if IS_WIN else "ctrl+alt"
 
 HOTKEY_NAME = os.environ.get("DICTATE_HOTKEY") or _DEFAULT_HOTKEY
 LANGUAGE = os.environ.get("DICTATE_LANGUAGE") or "nl"
