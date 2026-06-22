@@ -115,7 +115,9 @@ if ($device) {
     }
 }
 
-// ── Rate limiting (trial: max 60/uur per sleutel) ─────────────────────────
+// ── Rate limiting (trial: max 150/uur per sleutel) ────────────────────────
+// 150/uur geeft trial-gebruikers ruimte om dicteren én AI-modi echt uit te
+// proberen, terwijl misbruik nog steeds wordt afgeknepen.
 if ($tier === 'trial') {
     if (!isset($db)) {
         require_once __DIR__ . '/db.php';
@@ -126,9 +128,9 @@ if ($tier === 'trial') {
     try {
         $cnt = $db->prepare("SELECT COUNT(*) FROM rate_limits WHERE key_hash = ? AND endpoint = 'transcribe' AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
         $cnt->execute([$key_hash]);
-        if ((int)$cnt->fetchColumn() >= 60) {
+        if ((int)$cnt->fetchColumn() >= 150) {
             http_response_code(429);
-            echo json_encode(['error' => 'Te veel verzoeken — maximaal 60 transcripties per uur voor de proefversie. Upgrade op lazytype.com.']);
+            echo json_encode(['error' => 'Te veel verzoeken in het afgelopen uur (proefversie: max 150/uur). Wacht even of upgrade op lazytype.com.']);
             exit;
         }
         $db->prepare("INSERT INTO rate_limits (key_hash, endpoint) VALUES (?, 'transcribe')")->execute([$key_hash]);
