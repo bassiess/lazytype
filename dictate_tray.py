@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -130,6 +130,7 @@ state = {
     "busy": False,
     "history": dictate.HISTORY_ENABLED,   # dicteer-geschiedenis bewaren
     "context": os.environ.get("DICTATE_CONTEXT", "1").lower() in ("1", "true", "yes", "on"),  # toon per app
+    "realtime": os.environ.get("DICTATE_REALTIME", "0").lower() in ("1", "true", "yes", "on"),  # live preview
     "overlay": os.environ.get("DICTATE_OVERLAY", "1").lower() in ("1", "true", "yes", "on"),
     "active_mode": "dictate",       # dictate | command | translate (welke flow loopt nu)
     "active_matchers": None,        # welke sneltoets(-combo) de huidige opname startte
@@ -367,6 +368,7 @@ def handle_release():
     try:
         wav = recorder.stop()
         secs = recorder.duration()
+        overlay_ui.hide_preview()   # realtime preview-balk weg
         threading.Thread(target=lambda: dictate.beep("stop"), daemon=True).start()
         if secs < 0.3:
             return
@@ -627,6 +629,30 @@ def _restore_focus(hwnd: int):
         pass
 
 
+def _start_realtime_preview():
+    """Loop tijdens het opnemen: transcribeer de audio-tot-nu en toon 'm in de
+    preview-balk. Alleen bij realtime-toggle + dictate-modus + managed-engine."""
+    if not state.get("realtime") or state.get("active_mode") != "dictate" or state.get("engine") != "managed":
+        return
+
+    def _loop():
+        last = ""
+        while state["phase"] in ("recording", "arming"):
+            time.sleep(2.2)
+            if state["phase"] != "recording":
+                continue
+            try:
+                if recorder.duration() < 1.0:
+                    continue
+                txt = dictate.transcribe_managed(recorder.snapshot(), state["language"], "off")
+                if txt and txt != last:
+                    last = txt
+                    overlay_ui.show_preview(txt)
+            except Exception:
+                pass
+    threading.Thread(target=_loop, daemon=True).start()
+
+
 def _begin(matchers, mode, needs_arming):
     state["target_hwnd"] = _get_foreground_hwnd()
     recorder.start()
@@ -641,6 +667,7 @@ def _begin(matchers, mode, needs_arming):
     else:
         threading.Thread(target=lambda: dictate.beep("start"), daemon=True).start()
         set_phase("recording")
+    _start_realtime_preview()
 
 
 def on_press(key):
@@ -1417,6 +1444,8 @@ def open_dashboard(start_tab="instellingen"):
         dictate.save_env_value("DICTATE_POSTPROCESS", state["postprocess"])
         state["context"] = g_context()
         dictate.save_env_value("DICTATE_CONTEXT", "1" if state["context"] else "0")
+        state["realtime"] = g_realtime()
+        dictate.save_env_value("DICTATE_REALTIME", "1" if state["realtime"] else "0")
         new_overlay = g_overlay()
         if new_overlay != state["overlay"]:
             state["overlay"] = new_overlay
@@ -1458,6 +1487,7 @@ def open_dashboard(start_tab="instellingen"):
     section(scr_frame, "Nabewerking & gedrag")
     g_pp = _dropdown(tk, scr_frame, "AI-nabewerking (normaal dictaat)", POSTPROC_CHOICES, state["postprocess"])
     g_context = _checkbox(tk, scr_frame, "Context-bewuste toon (zakelijk in e-mail, casual in chat)", state["context"])
+    g_realtime = _checkbox(tk, scr_frame, "Realtime preview-balk (live tekst tijdens spreken — meer API-calls)", state["realtime"])
     g_overlay = _checkbox(tk, scr_frame, "Overlay-balkje tonen", state["overlay"])
     g_history = _checkbox(tk, scr_frame, "Dicteer-geschiedenis bewaren", state["history"])
     g_autostart = (_checkbox(tk, scr_frame, "Automatisch starten bij inloggen", is_autostart())
@@ -1585,6 +1615,7 @@ def open_dashboard(start_tab="instellingen"):
         ("Vertaaldoel", LANG_DISPLAY.get(state["translate_target"], state["translate_target"])),
         ("AI-nabewerking", _pp_disp),
         ("Context-toon", "aan" if state["context"] else "uit"),
+        ("Realtime preview", "aan" if state["realtime"] else "uit"),
         ("Dicteer-toets", _hk_display(state["hotkey_name"])),
         ("Command-toets", _hk_display(state["hotkey_command"])),
         ("Vertaal-toets", _hk_display(state["hotkey_translate"])),
@@ -2312,6 +2343,49 @@ class Overlay:
         if r:
             try: r.after(0, r.destroy)
             except Exception: pass
+
+    # ── Realtime preview-balk ────────────────────────────────────────────────
+    def show_preview(self, text):
+        """Toon (of werk bij) de drijvende preview-balk met de live transcriptie."""
+        r = self.root
+        if not r or not text:
+            return
+        import tkinter as tk
+
+        def _do():
+            try:
+                if not getattr(self, "_pv", None):
+                    self._pv = tk.Toplevel(r)
+                    self._pv.overrideredirect(True)
+                    self._pv.attributes("-topmost", True)
+                    try: self._pv.attributes("-alpha", 0.96)
+                    except Exception: pass
+                    self._pv.configure(bg="#0d0e13")
+                    self._pv_lbl = tk.Label(self._pv, text="", bg="#0d0e13", fg="#e8e6f5",
+                                            font=("Segoe UI", 11), wraplength=520,
+                                            justify="left", padx=14, pady=10)
+                    self._pv_lbl.pack()
+                self._pv_lbl.config(text=text)
+                self._pv.update_idletasks()
+                w = min(560, max(220, self._pv_lbl.winfo_reqwidth() + 28))
+                h = self._pv_lbl.winfo_reqheight() + 18
+                sw, sh = r.winfo_screenwidth(), r.winfo_screenheight()
+                self._pv.geometry(f"{w}x{h}+{(sw - w) // 2}+{sh - h - 110}")
+                self._pv.deiconify()
+            except Exception:
+                pass
+        try: r.after(0, _do)
+        except Exception: pass
+
+    def hide_preview(self):
+        r = self.root
+        if not r or not getattr(self, "_pv", None):
+            return
+        def _do():
+            try: self._pv.withdraw()
+            except Exception: pass
+        try: r.after(0, _do)
+        except Exception: pass
 
     def _safe(self):
         try: self._run()

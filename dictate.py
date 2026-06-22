@@ -1108,6 +1108,11 @@ class Recorder:
         self.last_level = 0.0
         return frames_to_wav(self.frames, self.sample_rate)
 
+    def snapshot(self) -> bytes:
+        """WAV-bytes van de audio tot nu toe, ZONDER de opname te stoppen
+        (voor de realtime preview)."""
+        return frames_to_wav(list(self.frames), self.sample_rate)
+
     def duration(self) -> float:
         total = sum(len(f) for f in self.frames) / 2
         return total / self.sample_rate
