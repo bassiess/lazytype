@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.8"
+APP_VERSION = "1.8.9"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -2835,6 +2835,91 @@ def toggle_overlay(icon_, item):
     refresh()
 
 
+# ── macOS-permissies (Invoerbewaking / Toegankelijkheid) ────────────────────
+def _mac_open_pref(pane: str):
+    """Open het juiste paneel in Systeeminstellingen → Privacy en beveiliging."""
+    try:
+        subprocess.run(["open", f"x-apple.systempreferences:com.apple.preference.security?{pane}"],
+                       check=False)
+    except Exception:
+        pass
+
+
+def _mac_permission_status():
+    """(toegankelijkheid_ok, invoerbewaking_ok) op macOS; (True, True) elders.
+    Checkt zónder een prompt te forceren. Bij twijfel: True (niet blokkeren)."""
+    if not IS_MAC:
+        return True, True
+    import ctypes
+    acc = inp = True
+    try:
+        a = ctypes.cdll.LoadLibrary(
+            "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
+        a.AXIsProcessTrusted.restype = ctypes.c_bool
+        acc = bool(a.AXIsProcessTrusted())
+    except Exception:
+        acc = True
+    try:
+        k = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/IOKit.framework/IOKit")
+        k.IOHIDCheckAccess.restype = ctypes.c_int
+        k.IOHIDCheckAccess.argtypes = [ctypes.c_uint32]
+        inp = (k.IOHIDCheckAccess(1) == 0)   # 1 = ListenEvent, return 0 = granted
+    except Exception:
+        inp = True
+    return acc, inp
+
+
+def _show_mac_permissions_window(acc_ok: bool, inp_ok: bool):
+    """Eenmalig uitleg-venster (main-thread, vóór de tray) dat de gebruiker naar de
+    juiste Systeeminstellingen stuurt. Toont alleen wat nog ontbreekt."""
+    import tkinter as tk
+    root = tk.Tk()
+    root.title("Lazytype — toestemming nodig")
+    root.configure(bg=UI_PAPER)
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
+    W, H = 470, 380
+    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
+    tk.Label(root, text="Toestemming nodig om te kunnen dicteren", bg=UI_PAPER, fg=UI_INK,
+             font=("Segoe UI", 15, "bold"), wraplength=W - 48, justify="left").pack(
+             fill="x", padx=24, pady=(20, 4))
+    tk.Label(root, text="Zet Lazytype aan in Systeeminstellingen → Privacy en beveiliging. "
+                        "Sluit Lazytype daarna af en open 'm opnieuw.",
+             bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 10), wraplength=W - 48,
+             justify="left").pack(fill="x", padx=24, pady=(0, 6))
+
+    def row(label, ok, pane, hint):
+        f = tk.Frame(root, bg=UI_PAPER); f.pack(fill="x", padx=24, pady=(10, 0))
+        if ok is None:
+            mark, col = "•", UI_SUB
+        else:
+            mark, col = ("✓", "#1f9d57") if ok else ("✗", "#cc3333")
+        tk.Label(f, text=mark, bg=UI_PAPER, fg=col, font=("Segoe UI", 13, "bold"),
+                 width=2).pack(side="left", anchor="n")
+        tf = tk.Frame(f, bg=UI_PAPER); tf.pack(side="left", fill="x", expand=True)
+        tk.Label(tf, text=label, bg=UI_PAPER, fg=UI_INK, font=("Segoe UI", 10, "bold"),
+                 anchor="w").pack(fill="x")
+        tk.Label(tf, text=hint, bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9), anchor="w",
+                 justify="left", wraplength=W - 150).pack(fill="x")
+        if ok is False:
+            _ghost_btn(tk, f, "Openen", lambda p=pane: _mac_open_pref(p)).pack(side="right")
+
+    row("Invoerbewaking", inp_ok, "Privacy_ListenEvent",
+        "Nodig om je dicteer-toets te kunnen horen.")
+    row("Toegankelijkheid", acc_ok, "Privacy_Accessibility",
+        "Nodig om de herkende tekst in je app te plakken.")
+    row("Microfoon", None, "Privacy_Microphone",
+        "Sta toe wanneer macOS het vraagt bij je eerste dictaat.")
+    bar = tk.Frame(root, bg=UI_PAPER); bar.pack(side="bottom", fill="x", padx=22, pady=18)
+    _accent_btn(tk, bar, "Doorgaan", root.destroy).pack(side="right")
+    try:
+        root.lift(); root.focus_force()
+    except Exception:
+        pass
+    root.mainloop()
+
+
 def main():
     global icon
 
@@ -2946,6 +3031,17 @@ def main():
                 dictate.save_env_value("GROQ_API_KEY", key.strip())
         except Exception as e:
             print(f"  (key-dialoog overgeslagen: {e})")
+
+    # macOS: zonder Invoerbewaking/Toegankelijkheid doet de hotkey/plakken stil
+    # niets. Detecteer dat en wijs de gebruiker gericht de weg (main-thread, vóór
+    # de tray — net als de onboarding).
+    if IS_MAC:
+        try:
+            _acc_ok, _inp_ok = _mac_permission_status()
+            if not (_acc_ok and _inp_ok):
+                _show_mac_permissions_window(_acc_ok, _inp_ok)
+        except Exception as e:
+            print(f"  (permissie-check overgeslagen: {e})")
 
     icon = pystray.Icon("lazytype", ICONS["idle"], "Lazytype", build_menu())
     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
