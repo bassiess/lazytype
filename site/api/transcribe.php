@@ -115,28 +115,54 @@ if ($device) {
     }
 }
 
-// ── Rate limiting (trial: max 150/uur per sleutel) ────────────────────────
-// 150/uur geeft trial-gebruikers ruimte om dicteren én AI-modi echt uit te
-// proberen, terwijl misbruik nog steeds wordt afgeknepen.
-if ($tier === 'trial') {
-    if (!isset($db)) {
-        require_once __DIR__ . '/db.php';
-        init_db();
-        $db = get_db();
-    }
-    $key_hash = hash('sha256', $license);
-    try {
+// ── Rate limiting & fair-use ──────────────────────────────────────────────
+// Trial   : max 150/uur per sleutel (ruimte om alles uit te proberen).
+// Betaald (pro/lifetime): een ruime fair-use-cap als vangnet tegen misbruik/
+// scripts — 600/uur (burst) én 8000/maand (~50 uur audio). Geen normale
+// gebruiker raakt dit; het begrenst de worst-case API-kosten per sleutel.
+// (Een zware échte gebruiker zit op ~2.500-3.000 calls/maand → ruim eronder.)
+const TRIAL_PER_HOUR   = 150;
+const PAID_PER_HOUR    = 600;
+const PAID_PER_MONTH   = 8000;
+if (!isset($db)) {
+    require_once __DIR__ . '/db.php';
+    init_db();
+    $db = get_db();
+}
+$key_hash = hash('sha256', $license);
+try {
+    if ($tier === 'trial') {
         $cnt = $db->prepare("SELECT COUNT(*) FROM rate_limits WHERE key_hash = ? AND endpoint = 'transcribe' AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
         $cnt->execute([$key_hash]);
-        if ((int)$cnt->fetchColumn() >= 150) {
+        if ((int)$cnt->fetchColumn() >= TRIAL_PER_HOUR) {
             http_response_code(429);
             echo json_encode(['error' => 'Te veel verzoeken in het afgelopen uur (proefversie: max 150/uur). Wacht even of upgrade op lazytype.com.']);
             exit;
         }
-        $db->prepare("INSERT INTO rate_limits (key_hash, endpoint) VALUES (?, 'transcribe')")->execute([$key_hash]);
-    } catch (\Exception $e) {
-        // DB-fout: transcriptie doorzetten zonder rate check
+    } else {
+        // Betaald: burst-cap per uur (stopt scripts/runaway-loops; mensen halen dit nooit).
+        $hr = $db->prepare("SELECT COUNT(*) FROM rate_limits WHERE key_hash = ? AND endpoint = 'transcribe' AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
+        $hr->execute([$key_hash]);
+        if ((int)$hr->fetchColumn() >= PAID_PER_HOUR) {
+            http_response_code(429);
+            echo json_encode(['error' => 'Ongebruikelijk veel verzoeken in korte tijd. Wacht heel even en probeer opnieuw — bij twijfel mail support@lazytype.com.']);
+            exit;
+        }
+        // Maand-cap (fair use): begrenst de totale API-kosten per sleutel per maand.
+        $period = date('Y-m');
+        $mc = $db->prepare("SELECT cnt FROM usage_counters WHERE key_hash = ? AND period = ?");
+        $mc->execute([$key_hash, $period]);
+        if ((int)$mc->fetchColumn() >= PAID_PER_MONTH) {
+            http_response_code(429);
+            echo json_encode(['error' => 'Maandelijkse fair-use-limiet bereikt (~50 uur dicteren deze maand). Heb je structureel meer nodig? Mail support@lazytype.com — we denken graag mee.']);
+            exit;
+        }
+        $db->prepare("INSERT INTO usage_counters (key_hash, period, cnt) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE cnt = cnt + 1")
+           ->execute([$key_hash, $period]);
     }
+    $db->prepare("INSERT INTO rate_limits (key_hash, endpoint) VALUES (?, 'transcribe')")->execute([$key_hash]);
+} catch (\Exception $e) {
+    // DB-fout: transcriptie doorzetten zonder rate check (fail-open)
 }
 
 // ── Tekst-only command (AI-mode via sneltoets): geen audio, directe bewerking ──

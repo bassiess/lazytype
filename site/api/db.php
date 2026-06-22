@@ -111,10 +111,32 @@ function init_db(): void {
             INDEX idx_key_time (key_hash, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    // Maand-tellers per sleutel (fair-use voor betaalde tiers). Apart van
+    // rate_limits, want die wordt na 48u opgeschoond — een maandtotaal heeft
+    // historie nodig. Eén rij per (sleutel, maand 'YYYY-MM').
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS usage_counters (
+            key_hash   VARCHAR(64) NOT NULL,
+            period     CHAR(7)     NOT NULL,
+            cnt        INT         DEFAULT 0,
+            updated_at DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (key_hash, period)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
     // Purge verlopen entries (~1% kans per aanroep)
     if (rand(1, 100) === 1) {
-        $db->exec("DELETE FROM rate_limits WHERE created_at < DATE_SUB(NOW(), INTERVAL 48 HOUR)");
+        $db->exec("DELETE FROM rate_limits    WHERE created_at < DATE_SUB(NOW(), INTERVAL 48 HOUR)");
+        $db->exec("DELETE FROM usage_counters WHERE updated_at < DATE_SUB(NOW(), INTERVAL 95 DAY)");
     }
+
+    // Globale stats — cumulatief woorden-teller (alleen optellend).
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS global_stats (
+            id          INT PRIMARY KEY DEFAULT 1,
+            total_words BIGINT UNSIGNED DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    try { $db->exec("INSERT IGNORE INTO global_stats (id, total_words) VALUES (1, 0)"); } catch (\Exception $e) {}
 }
 
 function generate_key(): string {
