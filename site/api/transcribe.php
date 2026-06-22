@@ -137,6 +137,23 @@ if ($tier === 'trial') {
     }
 }
 
+// ── Tekst-only command (AI-mode via sneltoets): geen audio, directe bewerking ──
+$mode_instruction = substr(trim($_POST['instruction'] ?? ''), 0, 2000);
+if ($mode_instruction !== '') {
+    $mode_target = substr(trim($_POST['command'] ?? ''), 0, 8000);
+    if ($mode_target === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'Geen tekst om te bewerken']);
+        exit;
+    }
+    $system = 'You edit text according to an instruction. Apply the instruction to the '
+            . "user's text and output ONLY the resulting text — no preamble, no quotes, "
+            . 'no explanation. Keep the original language unless the instruction says otherwise.';
+    $out = groq_chat($system, "Instruction: {$mode_instruction}\n\nText:\n{$mode_target}");
+    echo json_encode(['text' => $out !== null ? $out : $mode_target]);
+    exit;
+}
+
 // ── Audio ontvangen ───────────────────────────────────────────────────────
 if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
     http_response_code(400);

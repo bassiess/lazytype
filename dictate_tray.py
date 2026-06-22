@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 
@@ -317,9 +317,14 @@ def rebuild_hotkeys():
     dus losse toetsen én combo's wijzigen werkt zonder de app te herstarten."""
     global HOTKEYS_LIST
     lst = []
-    for spec, mode in ((state["hotkey_name"], "dictate"),
-                       (state["hotkey_command"], "command"),
-                       (state["hotkey_translate"], "translate")):
+    triggers = [(state["hotkey_name"], "dictate"),
+                (state["hotkey_command"], "command"),
+                (state["hotkey_translate"], "translate")]
+    # AI-modi met een eigen sneltoets → mode:<index>
+    for i, m in enumerate(dictate.load_modes()):
+        if m.get("hotkey"):
+            triggers.append((m["hotkey"], f"mode:{i}"))
+    for spec, mode in triggers:
         spec = (spec or "").strip()
         if not spec or spec.lower() in ("uit", "none", "geen", ""):
             continue
@@ -447,6 +452,64 @@ def handle_release():
             dictate.add_history(text)
     except Exception as e:
         print(f"  ⚠️  {e}")
+        state["last"] = f"Fout: {e}"
+        threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
+    finally:
+        state["busy"] = False
+        set_phase("idle")
+
+
+def apply_mode(idx: int, matchers):
+    """Pas een opgeslagen AI-mode toe op de selectie (of het laatste dictaat) — geen audio."""
+    try:
+        modes = dictate.load_modes()
+        if idx >= len(modes):
+            return
+        mode = modes[idx]
+        # Wacht tot de sneltoets is losgelaten, anders verstoren de modifiers de Ctrl/Cmd+C.
+        for _ in range(60):
+            if not _satisfied(matchers):
+                break
+            time.sleep(0.05)
+        time.sleep(0.05)
+        set_phase("working")
+        hwnd = state.get("target_hwnd", 0)
+        text = dictate.copy_selection() or state.get("last_dictation", "")
+        if not text:
+            state["last"] = f"{mode.get('name') or 'Mode'}: selecteer tekst of dicteer eerst"
+            threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
+            return
+        threading.Thread(target=lambda: dictate.beep("start"), daemon=True).start()
+        result = dictate.run_command_text(mode["instruction"], text, engine=state["engine"])
+        if not result:
+            state["last"] = "(geen resultaat)"
+            threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
+            return
+        _done = threading.Event()
+
+        def _out():
+            try:
+                _restore_focus(hwnd)
+                dictate.paste_text(result)
+            except Exception as _e:
+                print(f"  ⚠️ mode paste: {_e}")
+            finally:
+                _done.set()
+
+        if dictate.IS_WIN and overlay_ui.root:
+            overlay_ui.root.after(0, _out)
+            _done.wait(timeout=8.0)
+        else:
+            _restore_focus(hwnd)
+            dictate.paste_text(result)
+        state["last"] = result
+        state["last_dictation"] = result
+        state["last_paste_len"] = len(result) + (1 if dictate.TRAILING_SPACE and not result.endswith(" ") else 0)
+        threading.Thread(target=lambda: dictate.beep("done"), daemon=True).start()
+        if state.get("history"):
+            dictate.add_history(result)
+    except Exception as e:
+        print(f"  ⚠️ mode: {e}")
         state["last"] = f"Fout: {e}"
         threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
     finally:
@@ -588,7 +651,15 @@ def on_press(key):
         hit = next(((mt, md, am) for mt, md, am in HOTKEYS_LIST if _satisfied(mt)), None)
         if state["phase"] == "idle":
             if hit:
-                _begin(hit[0], hit[1], hit[2])
+                if hit[1].startswith("mode:"):
+                    # AI-mode: instant uitvoeren (geen opname). busy blokkeert key-repeat.
+                    state["busy"] = True
+                    state["target_hwnd"] = _get_foreground_hwnd()
+                    idx = int(hit[1].split(":", 1)[1])
+                    mt = hit[0]
+                    threading.Thread(target=lambda: apply_mode(idx, mt), daemon=True).start()
+                else:
+                    _begin(hit[0], hit[1], hit[2])
             return
         if state["phase"] == "arming":
             active = state.get("active_matchers") or []
@@ -1248,6 +1319,7 @@ def open_dashboard(start_tab="instellingen"):
     for tid, tlabel in [("abonnement", "Abonnement"),
                          ("instellingen", "Instellingen"),
                          ("woorden", "Woorden"),
+                         ("modi", "Modi"),
                          ("status", "Status"),
                          ("over", "Over")]:
         f = tk.Frame(content, bg=UI_PAPER)
@@ -1426,6 +1498,75 @@ def open_dashboard(start_tab="instellingen"):
     _file_editor(wd, dictate.SNIPPETS_FILE, "Snippets",
                  "Per regel:  trigger = tekst   (\\n voor een nieuwe regel).",
                  "# trigger = uit te vouwen tekst\n# bijv:  mijn agenda = https://calendly.com/bas\n")
+
+    # ── TAB: Modi (AI-modi met eigen sneltoets) ───────────────────────────
+    md2 = tab_frames["modi"]
+    section(md2, "AI-modi")
+    tk.Label(md2, text="Sla een instructie op met een eigen sneltoets. Toets indrukken past de "
+                       "instructie toe op je selectie — of, als je niets selecteert, op je laatste dictaat.",
+             bg=UI_PAPER, fg=UI_SUB, font=("Segoe UI", 9), justify="left",
+             anchor="w", wraplength=W - 48).pack(fill="x", padx=20)
+
+    modes_rows = []
+    modes_container = tk.Frame(md2, bg=UI_PAPER)
+    modes_container.pack(fill="both", expand=True, pady=(4, 0))
+
+    def _add_mode_row(name="", instruction="", hotkey="uit"):
+        rowf = tk.Frame(modes_container, bg="#f0efe9")
+        rowf.pack(fill="x", padx=20, pady=(8, 0))
+        top = tk.Frame(rowf, bg="#f0efe9")
+        top.pack(fill="x", padx=8, pady=(8, 0))
+        nm = tk.StringVar(value=name)
+        tk.Entry(top, textvariable=nm, font=("Segoe UI", 10, "bold"), relief="flat", bg="#ffffff",
+                 fg=UI_INK, insertbackground=UI_INK, highlightthickness=1,
+                 highlightbackground="#dedbd3").pack(side="left", fill="x", expand=True, ipady=3)
+        rec = {"name": nm}
+
+        def _rm():
+            rowf.destroy()
+            if rec in modes_rows:
+                modes_rows.remove(rec)
+        tk.Button(top, text="✕", command=_rm, bg="#f0efe9", fg=UI_SUB, relief="flat",
+                  bd=0, cursor="hand2", font=("Segoe UI", 10)).pack(side="left", padx=(6, 0))
+        instr = tk.StringVar(value=instruction)
+        tk.Entry(rowf, textvariable=instr, font=UI_FONT, relief="flat", bg="#ffffff", fg=UI_INK,
+                 insertbackground=UI_INK, highlightthickness=1, highlightbackground="#dedbd3").pack(
+                 fill="x", ipady=3, padx=8, pady=(4, 0))
+        rec["instr"] = instr
+        rec["hk"] = _dropdown(tk, rowf, "Sneltoets", HOTKEY_CHOICES, hotkey or "uit")
+        tk.Frame(rowf, bg="#f0efe9", height=6).pack()
+        modes_rows.append(rec)
+
+    for _m in dictate.load_modes():
+        _add_mode_row(_m.get("name", ""), _m.get("instruction", ""), _m.get("hotkey", "uit") or "uit")
+
+    mbtn = tk.Frame(md2, bg=UI_PAPER)
+    mbtn.pack(side="bottom", fill="x", padx=20, pady=12)
+
+    def _save_modes():
+        out = []
+        for r in modes_rows:
+            instr = r["instr"].get().strip()
+            if not instr:
+                continue
+            out.append({"name": r["name"].get().strip(), "instruction": instr, "hotkey": r["hk"]()})
+        # Sneltoetsen mogen niet botsen met dicteren/command/vertalen of elkaar.
+        hks = [m["hotkey"] for m in out if m["hotkey"] and m["hotkey"] != "uit"]
+        base = [state["hotkey_name"], state["hotkey_command"], state["hotkey_translate"]]
+        allhk = hks + [h for h in base if h and h != "uit"]
+        if len(allhk) != len(set(allhk)):
+            import tkinter.messagebox as mb
+            mb.showwarning("Dubbele sneltoets", "Een mode-sneltoets botst met een andere toets. "
+                           "Kies unieke toetsen.", parent=root)
+            return
+        dictate.save_modes(out)
+        rebuild_hotkeys()
+        if icon:
+            state["last"] = "Modi opgeslagen ✓"
+            refresh()
+        root.destroy()
+    _accent_btn(tk, mbtn, "Opslaan", _save_modes).pack(side="right")
+    _ghost_btn(tk, mbtn, "+ Mode toevoegen", lambda: _add_mode_row()).pack(side="left")
 
     # ── TAB: Status (read-only diagnostiek) ───────────────────────────────
     stt = tab_frames["status"]

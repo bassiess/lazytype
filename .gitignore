@@ -31,3 +31,4 @@ _tmp_*
 dictionary.txt
 snippets.txt
 site/downloads/sha256.txt
+modes.json

@@ -161,6 +161,35 @@ def load_snippets() -> dict:
     return snips
 
 
+# AI-modi: opgeslagen instructies met een eigen sneltoets. Toets indrukken → de
+# instructie wordt op je selectie/laatste dictaat toegepast (geen audio nodig).
+MODES_FILE = ROOT / "modes.json"
+
+
+def load_modes() -> list:
+    """Lijst van {"name","instruction","hotkey"}. Lege lijst bij ontbreken/fout."""
+    try:
+        import json
+        data = json.loads(MODES_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return [{"name": str(m.get("name", "")).strip(),
+                     "instruction": str(m.get("instruction", "")).strip(),
+                     "hotkey": str(m.get("hotkey", "")).strip()}
+                    for m in data if isinstance(m, dict) and m.get("instruction")]
+    except Exception:
+        pass
+    return []
+
+
+def save_modes(modes: list):
+    import json
+    clean = [{"name": (m.get("name") or "").strip(),
+              "instruction": (m.get("instruction") or "").strip(),
+              "hotkey": (m.get("hotkey") or "").strip()}
+             for m in modes if (m.get("instruction") or "").strip()]
+    MODES_FILE.write_text(json.dumps(clean, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 # ── Abonnement & 14-daagse proef ────────────────────────────────────────
 TRIAL_DAYS = 14
 
@@ -777,6 +806,39 @@ def transform_command(wav_bytes: bytes, selected_text: str, language: str = None
         return transcribe_managed(wav_bytes, language, "off", command=selected_text)
     instruction = finalize_text(transcribe(wav_bytes, engine, language))
     return apply_command(instruction, selected_text)
+
+
+def _command_text_managed(instruction: str, text: str) -> str:
+    """AI-mode (sneltoets): pas een TEKST-instructie toe op tekst via de server — geen audio."""
+    import requests
+    key = (os.environ.get("LAZYTYPE_LICENSE") or LICENSE).strip()
+    if not key:
+        raise RuntimeError("Geen licentiesleutel — vul je abonnement in (menu: Abonnement).")
+    r = requests.post(
+        os.environ.get("LAZYTYPE_API", API_URL),
+        data={"license": key, "device": ensure_device_id(),
+              "instruction": instruction, "command": text},
+        timeout=60,
+    )
+    if r.status_code in (402, 403, 413, 429):
+        try:
+            raise RuntimeError(r.json().get("error", "abonnement ongeldig"))
+        except RuntimeError:
+            raise
+        except Exception:
+            raise RuntimeError("abonnement ongeldig of verlopen")
+    if not r.ok:
+        raise RuntimeError(f"Mode-fout {r.status_code}: {r.text[:200]}")
+    return (r.json().get("text") or "").strip()
+
+
+def run_command_text(instruction: str, text: str, engine: str = None) -> str:
+    """Pas een opgeslagen AI-mode-instructie toe op tekst (zonder audio)."""
+    engine = engine or ENGINE
+    check_access(engine)
+    if engine == "managed":
+        return _command_text_managed(instruction, text)
+    return apply_command(instruction, text)   # eigen Groq-key
 
 
 # ── API-key opslaan in .env ─────────────────────────────────────────────
