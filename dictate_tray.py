@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.3"
+APP_VERSION = "1.8.4"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -1336,7 +1336,7 @@ def open_dashboard(start_tab="instellingen"):
     root.configure(bg=UI_PAPER)
     root.attributes("-topmost", True)
     root.resizable(False, False)
-    W = 560
+    W = 620   # breed genoeg voor de 7 tabs (tabbalk vroeg ~558px → 'Over' viel net buiten beeld)
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     H = min(880, sh - 80)   # ruim: scrollen is meestal niet meer nodig (blijft als vangnet)
     root.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
