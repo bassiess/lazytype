@@ -38,11 +38,16 @@ jobs:
       - name: Smoke-test gebouwde app
         run: dist/Lazytype.app/Contents/MacOS/Lazytype --selftest
 
-      - name: Maak DMG
+      - name: Maak DMG (met sleep-naar-Programma's)
         run: |
+          rm -rf dmg_stage
+          mkdir -p dmg_stage
+          cp -R dist/Lazytype.app dmg_stage/
+          ln -s /Applications dmg_stage/Applications
           hdiutil create \
             -volname "Lazytype" \
-            -srcfolder dist/Lazytype.app \
+            -srcfolder dmg_stage \
+            -fs HFS+ \
             -ov -format UDZO \
             dist/Lazytype.dmg
 
