@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.4"
+APP_VERSION = "1.8.5"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -2582,6 +2582,11 @@ class Overlay:
         self._alpha = 0.25
 
     def start(self):
+        # macOS: Tk/Cocoa MOET op de main-thread draaien; de overlay op een
+        # achtergrond-thread starten geeft een native abort ("onverwacht gestopt").
+        # Het tray-icoon claimt de main-thread al, dus geen overlay op Mac.
+        if IS_MAC:
+            return
         if self.thread and self.thread.is_alive():
             return
         self.thread = threading.Thread(target=self._safe, daemon=True)
