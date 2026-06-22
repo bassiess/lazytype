@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.6"
+APP_VERSION = "1.8.7"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -901,7 +901,30 @@ def toggle_autostart(icon_, item):
 
 
 # ── Eigen invoer-dialoog in de site-stijl (vervangt de grijze simpledialog) ──
+def _dlg_subprocess(kind, **spec):
+    """macOS: toon een Tk-dialoog in een APART proces. Tk/Cocoa mag niet op een
+    pystray/worker-thread draaien (→ native abort). Geeft de ingevoerde tekst
+    terug (input-dialoog), of None."""
+    import subprocess, json, base64
+    payload = base64.b64encode(json.dumps({"kind": kind, **spec}).encode()).decode()
+    try:
+        r = subprocess.run([sys.executable, "--dlg", payload], capture_output=True, timeout=1800)
+        for ln in r.stdout.decode("utf-8", "replace").splitlines():
+            if ln.startswith("RESULT:"):
+                return base64.b64decode(ln[7:]).decode("utf-8", "replace")
+    except Exception:
+        pass
+    return None
+
+
 def _themed_input(title, prompt, initial="", secret=False):
+    if IS_MAC:   # niet op een worker/pystray-thread → apart proces
+        return _dlg_subprocess("input", title=title, prompt=prompt,
+                               initial=initial or "", secret=bool(secret))
+    return _themed_input_tk(title, prompt, initial, secret)
+
+
+def _themed_input_tk(title, prompt, initial="", secret=False):
     import tkinter as tk
     result = {"value": None}
     root = tk.Tk()
@@ -1029,18 +1052,23 @@ def _ask(title: str, prompt: str, initial: str = ""):
 
 
 def _show_text(title: str, text: str):
-    def worker():
-        import tkinter as tk
-        from tkinter.scrolledtext import ScrolledText
-        root = tk.Tk(); root.title(title); root.attributes("-topmost", True)
-        root.configure(bg=UI_PAPER)
-        box = ScrolledText(root, width=80, height=22, font=UI_MONO, bg="#ffffff",
-                           fg=UI_INK, insertbackground=UI_INK, relief="flat",
-                           borderwidth=0, padx=12, pady=10)
-        box.pack(fill="both", expand=True, padx=12, pady=12)
-        box.insert("1.0", text); box.configure(state="disabled")
-        root.mainloop()
-    threading.Thread(target=worker, daemon=True).start()
+    if IS_MAC:   # apart proces (Tk niet op een worker-thread)
+        _dlg_subprocess("text", title=title, text=text)
+        return
+    threading.Thread(target=lambda: _show_text_tk(title, text), daemon=True).start()
+
+
+def _show_text_tk(title: str, text: str):
+    import tkinter as tk
+    from tkinter.scrolledtext import ScrolledText
+    root = tk.Tk(); root.title(title); root.attributes("-topmost", True)
+    root.configure(bg=UI_PAPER)
+    box = ScrolledText(root, width=80, height=22, font=UI_MONO, bg="#ffffff",
+                       fg=UI_INK, insertbackground=UI_INK, relief="flat",
+                       borderwidth=0, padx=12, pady=10)
+    box.pack(fill="both", expand=True, padx=12, pady=12)
+    box.insert("1.0", text); box.configure(state="disabled")
+    root.mainloop()
 
 
 def admin_gen_action(icon_, item):
@@ -1088,43 +1116,49 @@ def admin_revoke_action(icon_, item):
     threading.Thread(target=worker, daemon=True).start()
 
 
+def _edit_file_tk(path, title, label, default=""):
+    import tkinter as tk
+    from tkinter.scrolledtext import ScrolledText
+    try:
+        content = Path(path).read_text(encoding="utf-8")
+    except Exception:
+        content = default
+    root = tk.Tk()
+    root.title(title)
+    root.attributes("-topmost", True)
+    root.configure(bg=UI_PAPER)
+    tk.Label(root, text=label, anchor="w", justify="left", bg=UI_PAPER,
+             fg=UI_INK, font=UI_FONT).pack(fill="x", padx=14, pady=(14, 6))
+    box = ScrolledText(root, width=58, height=18, font=UI_MONO, bg="#ffffff",
+                       fg=UI_INK, insertbackground=UI_INK, relief="flat",
+                       borderwidth=0, padx=12, pady=10)
+    box.pack(fill="both", expand=True, padx=14)
+    box.insert("1.0", content)
+
+    def save():
+        try:
+            Path(path).write_text(box.get("1.0", "end-1c"), encoding="utf-8")
+            state["last"] = "Opgeslagen ✓"
+        except Exception as e:
+            state["last"] = f"Opslaan mislukt: {e}"
+        root.destroy()
+        refresh()
+
+    tk.Button(root, text="Opslaan", command=save, bg=UI_ACCENT, fg="white",
+              activebackground=UI_ACCENT2, activeforeground="white", relief="flat",
+              font=("Segoe UI", 10, "bold"), padx=20, pady=7, cursor="hand2",
+              borderwidth=0).pack(pady=12)
+    root.mainloop()
+
+
 def _edit_file_action(path, title, label, default=""):
     """Factory: maakt een menu-actie die een tekstbestand in een editor opent."""
     def action(icon_, item):
-        def worker():
-            import tkinter as tk
-            from tkinter.scrolledtext import ScrolledText
-            try:
-                content = path.read_text(encoding="utf-8")
-            except Exception:
-                content = default
-            root = tk.Tk()
-            root.title(title)
-            root.attributes("-topmost", True)
-            root.configure(bg=UI_PAPER)
-            tk.Label(root, text=label, anchor="w", justify="left", bg=UI_PAPER,
-                     fg=UI_INK, font=UI_FONT).pack(fill="x", padx=14, pady=(14, 6))
-            box = ScrolledText(root, width=58, height=18, font=UI_MONO, bg="#ffffff",
-                               fg=UI_INK, insertbackground=UI_INK, relief="flat",
-                               borderwidth=0, padx=12, pady=10)
-            box.pack(fill="both", expand=True, padx=14)
-            box.insert("1.0", content)
-
-            def save():
-                try:
-                    path.write_text(box.get("1.0", "end-1c"), encoding="utf-8")
-                    state["last"] = "Opgeslagen ✓"
-                except Exception as e:
-                    state["last"] = f"Opslaan mislukt: {e}"
-                root.destroy()
-                refresh()
-
-            tk.Button(root, text="Opslaan", command=save, bg=UI_ACCENT, fg="white",
-                      activebackground=UI_ACCENT2, activeforeground="white", relief="flat",
-                      font=("Segoe UI", 10, "bold"), padx=20, pady=7, cursor="hand2",
-                      borderwidth=0).pack(pady=12)
-            root.mainloop()
-        threading.Thread(target=worker, daemon=True).start()
+        if IS_MAC:   # apart proces (Tk niet op een worker-thread)
+            _dlg_subprocess("edit", path=str(path), title=title, label=label, default=default)
+            refresh()
+            return
+        threading.Thread(target=lambda: _edit_file_tk(path, title, label, default), daemon=True).start()
     return action
 
 
@@ -2837,6 +2871,27 @@ def main():
 
     if "--stats" in sys.argv:
         _run_settings_window("statistieken")
+        return
+
+    if "--dlg" in sys.argv:
+        # macOS-dialoog in een apart proces (Tk op de main-thread van DIT proces).
+        import base64, json
+        i = sys.argv.index("--dlg")
+        try:
+            spec = json.loads(base64.b64decode(sys.argv[i + 1]).decode())
+        except Exception:
+            return
+        kind = spec.get("kind")
+        if kind == "input":
+            v = _themed_input_tk(spec.get("title", ""), spec.get("prompt", ""),
+                                 spec.get("initial", ""), spec.get("secret", False))
+            if v is not None:
+                print("RESULT:" + base64.b64encode(v.encode()).decode())
+        elif kind == "text":
+            _show_text_tk(spec.get("title", ""), spec.get("text", ""))
+        elif kind == "edit":
+            _edit_file_tk(spec.get("path", ""), spec.get("title", ""),
+                          spec.get("label", ""), spec.get("default", ""))
         return
 
     if "--selftest" in sys.argv:
