@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.11"
+APP_VERSION = "1.8.12"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -907,6 +907,105 @@ def toggle_autostart(icon_, item):
     set_autostart(new)
     dictate.save_env_value("DICTATE_AUTOSTART_OPTOUT", "0" if new else "1")  # keuze onthouden
     refresh()
+
+
+# ── Windows: als 'echt' programma registreren (Start-menu + Geïnstalleerde apps) ──
+def _win_make_shortcut(lnk_path: str, target: str) -> bool:
+    """Maak een .lnk via WScript.Shell (PowerShell) — geen extra dependency."""
+    t = target.replace("'", "''"); l = lnk_path.replace("'", "''")
+    ps = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{l}');"
+          f"$s.TargetPath='{t}';$s.IconLocation='{t},0';"
+          f"$s.Description='Lazytype — spraak naar tekst';$s.Save()")
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps],
+                       creationflags=0x08000000, timeout=25,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return Path(lnk_path).exists()
+    except Exception:
+        return False
+
+
+def _win_start_menu_lnk() -> Path:
+    return (Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" /
+            "Start Menu" / "Programs" / "Lazytype.lnk")
+
+
+def _win_install_integration():
+    """Eenmalig (frozen Windows): Start-menu-snelkoppeling + vermelding in
+    Geïnstalleerde apps, zodat Lazytype tussen je programma's staat i.p.v. alleen
+    een tray-icoon. Respecteert een eerdere registratie via DICTATE_REGISTERED."""
+    if not (IS_WIN and getattr(sys, "frozen", False)):
+        return
+    if os.environ.get("DICTATE_REGISTERED", "").lower() in ("1", "true", "yes"):
+        return
+    exe = str(Path(sys.executable).resolve())
+    try:
+        lnk = _win_start_menu_lnk()
+        lnk.parent.mkdir(parents=True, exist_ok=True)
+        _win_make_shortcut(str(lnk), exe)
+        import winreg
+        key = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Lazytype"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as k:
+            winreg.SetValueEx(k, "DisplayName", 0, winreg.REG_SZ, "Lazytype")
+            winreg.SetValueEx(k, "DisplayVersion", 0, winreg.REG_SZ, APP_VERSION)
+            winreg.SetValueEx(k, "Publisher", 0, winreg.REG_SZ, "Lazytype")
+            winreg.SetValueEx(k, "DisplayIcon", 0, winreg.REG_SZ, exe)
+            winreg.SetValueEx(k, "InstallLocation", 0, winreg.REG_SZ, str(Path(exe).parent))
+            winreg.SetValueEx(k, "UninstallString", 0, winreg.REG_SZ, f'"{exe}" --uninstall')
+            winreg.SetValueEx(k, "URLInfoAbout", 0, winreg.REG_SZ, "https://lazytype.com")
+            winreg.SetValueEx(k, "NoModify", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(k, "NoRepair", 0, winreg.REG_DWORD, 1)
+        dictate.save_env_value("DICTATE_REGISTERED", "1")
+        print("  Windows-integratie: Start-menu-snelkoppeling + Geïnstalleerde apps")
+    except Exception as e:
+        print(f"  (Windows-integratie overgeslagen: {e})")
+
+
+def _win_uninstall():
+    """Verwijder Lazytype netjes (aangeroepen vanuit Geïnstalleerde apps → Verwijderen)."""
+    if not IS_WIN:
+        return
+    try:
+        import tkinter as tk, tkinter.messagebox as mb
+        r = tk.Tk(); r.withdraw(); r.attributes("-topmost", True)
+        ok = mb.askyesno("Lazytype verwijderen",
+                         "Weet je zeker dat je Lazytype wilt verwijderen?\n\n"
+                         "Dit verwijdert de app, je instellingen en de autostart.")
+        r.destroy()
+    except Exception:
+        ok = True
+    if not ok:
+        return
+    import winreg, tempfile, shutil
+    exe = Path(sys.executable).resolve()
+    try:
+        set_autostart(False)
+    except Exception:
+        pass
+    try:
+        _win_start_menu_lnk().unlink(missing_ok=True)
+    except Exception:
+        pass
+    try:
+        winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
+                         r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Lazytype")
+    except Exception:
+        pass
+    try:
+        appdir = Path(os.environ.get("APPDATA", "")) / "Lazytype"
+        if appdir.exists():
+            shutil.rmtree(appdir, ignore_errors=True)
+    except Exception:
+        pass
+    try:
+        bat = Path(tempfile.gettempdir()) / "lazytype_uninstall.bat"
+        bat.write_text("@echo off\r\nping -n 3 127.0.0.1 >nul\r\n"
+                       f'del /f /q "{exe}" >nul 2>&1\r\n'
+                       'del "%~f0" >nul 2>&1\r\n', encoding="ascii")
+        subprocess.Popen(["cmd", "/c", str(bat)], cwd=tempfile.gettempdir(),
+                         creationflags=0x08000000 | 0x00000008, close_fds=True)
+    except Exception:
+        pass
 
 
 # ── Eigen invoer-dialoog in de site-stijl (vervangt de grijze simpledialog) ──
@@ -2969,6 +3068,10 @@ def main():
         _run_settings_window("statistieken")
         return
 
+    if "--uninstall" in sys.argv:
+        _win_uninstall()
+        return
+
     if "--dlg" in sys.argv:
         # macOS-dialoog in een apart proces (Tk op de main-thread van DIT proces).
         import base64, json
@@ -3063,6 +3166,9 @@ def main():
                 print("  Autostart: standaard ingeschakeld (uit te zetten via tray/Instellingen)")
         except Exception as e:
             print(f"  (autostart aanzetten overgeslagen: {e})")
+
+    # Windows: eenmalig als 'echt' programma registreren (Start-menu + Geïnstalleerde apps).
+    _win_install_integration()
 
     icon = pystray.Icon("lazytype", ICONS["idle"], "Lazytype", build_menu())
     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
