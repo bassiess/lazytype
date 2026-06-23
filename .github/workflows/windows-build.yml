@@ -1,0 +1,101 @@
+name: Build Windows
+
+# Bouwt de Windows-exe op een GitHub-runner en ondertekent 'm met Azure Artifact
+# Signing (was "Trusted Signing"). De sign-stap draait ALLEEN als de Azure-secrets
+# aanwezig zijn — anders wordt de exe gewoon ongetekend gebouwd (handig om de
+# pipeline te testen vóór het Azure-account er is). Zie docs/WINDOWS_SIGNING.md.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  id-token: write     # nodig voor azure/login (OIDC, zonder opgeslagen secret)
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installeer dependencies
+        run: pip install -r requirements.txt "pyinstaller>=6,<7"
+
+      - name: Genereer iconen
+        shell: bash
+        run: python dictate_tray.py --make-icons || true
+
+      - name: Bouw Lazytype.exe
+        shell: bash
+        run: |
+          ICON_ARG=""
+          [ -f icon.ico ] && ICON_ARG="--icon=icon.ico"
+          python -m PyInstaller --noconfirm --onefile --windowed \
+            $ICON_ARG --name=Lazytype \
+            --add-data "site/version.json;." \
+            dictate_tray.py
+          test -f dist/Lazytype.exe && echo "exe gebouwd"
+
+      # ── Ondertekenen — alleen als de Azure-signing-secrets gezet zijn ──────────
+      - name: Signing-config aanwezig?
+        id: cfg
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.AZURE_CLIENT_ID }}" ] && [ -n "${{ secrets.SIGNING_ACCOUNT_NAME }}" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+            echo "Azure-signing-secrets gevonden -> exe wordt ondertekend."
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Geen Azure-signing-secrets -> exe wordt ONGETEKEND gebouwd (pipeline-test)."
+          fi
+
+      - name: Azure login (OIDC)
+        if: steps.cfg.outputs.sign == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Onderteken Lazytype.exe (Azure Artifact Signing)
+        if: steps.cfg.outputs.sign == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ secrets.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.SIGNING_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verifieer handtekening
+        if: steps.cfg.outputs.sign == 'true'
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature dist/Lazytype.exe
+          Write-Host "Status : $($sig.Status)"
+          Write-Host "Signer : $($sig.SignerCertificate.Subject)"
+          if ($sig.Status -ne 'Valid') { exit 1 }
+
+      - name: SHA256
+        shell: bash
+        run: |
+          python -c "import hashlib;print(hashlib.sha256(open('dist/Lazytype.exe','rb').read()).hexdigest())" > dist/sha256.txt
+          cat dist/sha256.txt
+
+      - name: Upload artifact (90 dagen)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lazytype-Windows
+          path: |
+            dist/Lazytype.exe
+            dist/sha256.txt
+          retention-days: 90
