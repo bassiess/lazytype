@@ -220,41 +220,62 @@ if (!$is_valid_pp) {
     $postprocess = 'off';
 }
 
-// ── Groq API aanroepen ────────────────────────────────────────────────────
-$fields = [
-    'model'           => 'whisper-large-v3-turbo',
-    'response_format' => 'json',
-    'file'            => new CURLFile($wav, 'audio/wav', 'audio.wav'),
-];
-if ($language && $language !== 'auto') {
-    $fields['language'] = $language;
-}
-if ($prompt) {
-    $fields['prompt'] = $prompt;
+// ── Spraak→tekst: Groq (primair) + OpenAI-fallback bij uitval ──────────────
+// Bij een Groq-storing (netwerkfout / 5xx / rate-limit 429) wijken we automatisch
+// uit naar OpenAI Whisper, zodat de betaalde dienst blijft werken. Een 4xx (bv.
+// ongeldige audio of foute key) is géén uitval → dan niet uitwijken maar de fout
+// teruggeven. OpenAI-fallback is alleen actief als OPENAI_API_KEY is gezet.
+function stt_call(string $url, string $key, string $model, string $wav, string $language, string $prompt): array {
+    $fields = [
+        'model'           => $model,
+        'response_format' => 'json',
+        'file'            => new CURLFile($wav, 'audio/wav', 'audio.wav'),
+    ];
+    if ($language && $language !== 'auto') {
+        $fields['language'] = $language;
+    }
+    if ($prompt) {
+        $fields['prompt'] = $prompt;
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $key],
+        CURLOPT_POSTFIELDS     => $fields,
+        CURLOPT_TIMEOUT        => 60,
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    return [$code, $body, $err];
 }
 
-$ch = curl_init('https://api.groq.com/openai/v1/audio/transcriptions');
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST           => true,
-    CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . GROQ_API_KEY],
-    CURLOPT_POSTFIELDS     => $fields,
-    CURLOPT_TIMEOUT        => 60,
-]);
-$body       = curl_exec($ch);
-$http_code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curl_error = curl_error($ch);
-curl_close($ch);
+[$http_code, $body, $curl_error] = stt_call(
+    'https://api.groq.com/openai/v1/audio/transcriptions',
+    GROQ_API_KEY, 'whisper-large-v3-turbo', $wav, $language, $prompt
+);
+
+$openai_key   = defined('OPENAI_API_KEY') ? OPENAI_API_KEY : '';
+$groq_unavail = ($curl_error !== '' || $http_code === 0 || $http_code === 429 || $http_code >= 500);
+if ($groq_unavail && $openai_key !== '') {
+    error_log("Lazytype: Groq STT onbereikbaar (code={$http_code} err={$curl_error}) -> OpenAI-fallback");
+    [$http_code, $body, $curl_error] = stt_call(
+        'https://api.openai.com/v1/audio/transcriptions',
+        $openai_key, 'whisper-1', $wav, $language, $prompt
+    );
+}
 
 if ($curl_error) {
     http_response_code(502);
-    echo json_encode(['error' => "Verbindingsfout met Groq: $curl_error"]);
+    echo json_encode(['error' => "Verbindingsfout met transcriptie-dienst: $curl_error"]);
     exit;
 }
 if ($http_code !== 200) {
     http_response_code(502);
-    $groq_msg = json_decode($body, true)['error']['message'] ?? substr($body, 0, 200);
-    echo json_encode(['error' => "Groq-fout ($http_code): $groq_msg"]);
+    $api_msg = json_decode($body, true)['error']['message'] ?? substr($body, 0, 200);
+    echo json_encode(['error' => "Transcriptie-fout ($http_code): $api_msg"]);
     exit;
 }
 
@@ -264,21 +285,21 @@ $text = trim($data['text'] ?? '');
 // ── Nabewerking via Groq chat (vertalen / opschonen / command-mode) ─────────
 // De client (managed-engine) stuurt postprocess + command mee; vroeger negeerde
 // de server die, waardoor vertalen/opschonen/command voor Pro+trial niet werkte.
-function groq_chat(string $system, string $user): ?string {
+function _chat_call(string $url, string $key, string $model, string $system, string $user): ?string {
     $payload = json_encode([
-        'model'       => 'llama-3.3-70b-versatile',
+        'model'       => $model,
         'temperature' => 0,
         'messages'    => [
             ['role' => 'system', 'content' => $system],
             ['role' => 'user',   'content' => $user],
         ],
     ]);
-    $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_HTTPHEADER     => [
-            'Authorization: Bearer ' . GROQ_API_KEY,
+            'Authorization: Bearer ' . $key,
             'Content-Type: application/json',
         ],
         CURLOPT_POSTFIELDS     => $payload,
@@ -286,12 +307,29 @@ function groq_chat(string $system, string $user): ?string {
     ]);
     $resp = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
     if ($code !== 200 || $resp === false) {
         return null;
     }
-    $j = json_decode($resp, true);
+    $j   = json_decode($resp, true);
     $out = trim($j['choices'][0]['message']['content'] ?? '');
     return $out !== '' ? $out : null;
+}
+
+// Groq (primair) + OpenAI-fallback bij uitval. Zelfde aanroep voor opschonen,
+// vertalen, command-mode én AI-modi (die lopen allemaal via groq_chat).
+function groq_chat(string $system, string $user): ?string {
+    $out = _chat_call('https://api.groq.com/openai/v1/chat/completions',
+                      GROQ_API_KEY, 'llama-3.3-70b-versatile', $system, $user);
+    if ($out !== null) {
+        return $out;
+    }
+    if (defined('OPENAI_API_KEY') && OPENAI_API_KEY !== '') {
+        error_log('Lazytype: Groq chat onbereikbaar -> OpenAI-fallback');
+        return _chat_call('https://api.openai.com/v1/chat/completions',
+                          OPENAI_API_KEY, 'gpt-4o-mini', $system, $user);
+    }
+    return null;
 }
 
 $LANG_NAMES = [
