@@ -1011,6 +1011,56 @@ def _clipboard_set(text: str) -> bool:
     return False
 
 
+def _send_ctrl_v():
+    """Stuur Ctrl+V ATOMAIR via SendInput. Losse keybd_event-calls met korte sleeps
+    laten de 'V' soms vóór de Ctrl aankomen → er verschijnt een losse letter 'v'
+    achter de geplakte tekst. SendInput plaatst Ctrl↓ V↓ V↑ Ctrl↑ als één blok in
+    de invoerwachtrij, in volgorde, zonder dat fysieke input ertussen kan komen.
+    Valt terug op keybd_event (met ruimere sleeps) als SendInput faalt."""
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.windll.user32
+    ULONG_PTR = wintypes.WPARAM           # pointer-groot op 32- én 64-bit
+    KEYEVENTF_KEYUP = 0x0002
+    VK_CONTROL, VK_V = 0x11, 0x56
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = (("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
+                    ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                    ("dwExtraInfo", ULONG_PTR))
+
+    class MOUSEINPUT(ctypes.Structure):   # alleen aanwezig voor de juiste union-grootte
+        _fields_ = (("dx", wintypes.LONG), ("dy", wintypes.LONG),
+                    ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD), ("dwExtraInfo", ULONG_PTR))
+
+    class _U(ctypes.Union):
+        _fields_ = (("ki", KEYBDINPUT), ("mi", MOUSEINPUT))
+
+    class INPUT(ctypes.Structure):
+        _fields_ = (("type", wintypes.DWORD), ("u", _U))
+
+    def _ev(vk, up):
+        e = INPUT(); e.type = 1            # INPUT_KEYBOARD
+        e.u.ki = KEYBDINPUT(vk, 0, KEYEVENTF_KEYUP if up else 0, 0, 0)
+        return e
+
+    try:
+        seq = (INPUT * 4)(_ev(VK_CONTROL, False), _ev(VK_V, False),
+                          _ev(VK_V, True), _ev(VK_CONTROL, True))
+        u32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
+        u32.SendInput.restype = wintypes.UINT
+        if u32.SendInput(4, seq, ctypes.sizeof(INPUT)) == 4:
+            return
+    except Exception:
+        pass
+    # Fallback: losse calls met ruimere sleeps (Ctrl zeker eerst geregistreerd).
+    u32.keybd_event(VK_CONTROL, 0, 0, 0);            time.sleep(0.04)
+    u32.keybd_event(VK_V,       0, 0, 0);            time.sleep(0.02)
+    u32.keybd_event(VK_V,       0, KEYEVENTF_KEYUP, 0); time.sleep(0.04)
+    u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+
+
 def _paste_win32(text: str):
     """Plak via directe Win32-calls (betrouwbaarder dan pyperclip + pynput in frozen exe)."""
     import ctypes
@@ -1070,16 +1120,8 @@ def _paste_win32(text: str):
 
     time.sleep(0.05)
 
-    # Ctrl+V via keybd_event (omzeilt mogelijke pynput-Controller interferentie)
-    VK_CONTROL    = 0x11
-    VK_V          = 0x56
-    KEYEVENTF_UP  = 0x0002
-    u32.keybd_event(VK_CONTROL, 0, 0,            0)
-    time.sleep(0.01)
-    u32.keybd_event(VK_V,       0, 0,            0)
-    u32.keybd_event(VK_V,       0, KEYEVENTF_UP, 0)
-    time.sleep(0.01)
-    u32.keybd_event(VK_CONTROL, 0, KEYEVENTF_UP, 0)
+    # Ctrl+V atomair (voorkomt de losse 'v' achter de tekst — zie _send_ctrl_v).
+    _send_ctrl_v()
 
     if RESTORE_CLIPBOARD and previous is not None and previous != text:
         def _restore():
