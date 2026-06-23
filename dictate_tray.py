@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.12"
+APP_VERSION = "1.8.13"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -3030,6 +3030,56 @@ def _show_mac_permissions_window(acc_ok: bool, inp_ok: bool):
     root.mainloop()
 
 
+# ── Single-instance: één exemplaar tegelijk (Windows) ───────────────────────
+_SINGLE_MUTEX = None  # handle vasthouden zolang de app draait
+
+
+def _signal_open_settings():
+    try:
+        (dictate.ROOT / ".open_settings").write_text("1", encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _acquire_single_instance() -> bool:
+    """True = wij zijn de primaire/enige instantie. False = er draait er al een
+    (die is dan gesignaleerd om het instellingen-venster te tonen). macOS regelt
+    single-instance zelf via LaunchServices → daar altijd True."""
+    global _SINGLE_MUTEX
+    if not IS_WIN:
+        return True
+    try:
+        import ctypes
+        from ctypes import wintypes
+        k32 = ctypes.windll.kernel32
+        k32.CreateMutexW.restype = wintypes.HANDLE
+        k32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+        _SINGLE_MUTEX = k32.CreateMutexW(None, False, "Lazytype_singleton_v1")
+        if k32.GetLastError() == 183:        # ERROR_ALREADY_EXISTS
+            _signal_open_settings()
+            return False
+    except Exception:
+        return True                          # bij twijfel: gewoon starten
+    return True
+
+
+def _watch_open_settings():
+    """Primaire instantie: open de instellingen als een tweede start ons signaleert."""
+    sf = dictate.ROOT / ".open_settings"
+    try:
+        sf.unlink(missing_ok=True)           # achtergebleven signaal negeren
+    except Exception:
+        pass
+    while True:
+        time.sleep(1.0)
+        try:
+            if sf.exists():
+                sf.unlink(missing_ok=True)
+                open_settings(None, None)
+        except Exception:
+            pass
+
+
 def main():
     global icon
 
@@ -3125,6 +3175,12 @@ def main():
         print("selftest OK — alle menu-teksten gerenderd; preview -> tray-preview.png")
         return
 
+    # Eén exemplaar tegelijk: draait Lazytype al en open je 'm opnieuw (snelkoppeling/
+    # autostart), dan opent het instellingen-venster van de draaiende app i.p.v. een
+    # tweede, botsend exemplaar.
+    if not _acquire_single_instance():
+        return
+
     # Onboarding bij eerste start, of als er nog niets geconfigureerd is (gebroken .env).
     _nothing_configured = (
         not os.environ.get("DICTATE_ENGINE") and
@@ -3176,6 +3232,8 @@ def main():
     threading.Thread(target=_check_update, daemon=True).start()
     threading.Thread(target=dictate.verify_personal_key, daemon=True).start()
     threading.Thread(target=_cleanup_stale_mei, daemon=True).start()
+    if IS_WIN:   # luister naar een 2e start → toon instellingen i.p.v. duplicaat
+        threading.Thread(target=_watch_open_settings, daemon=True).start()
 
     print("=" * 58)
     print("  🎙️  Lazytype (systeemvak) is actief")
