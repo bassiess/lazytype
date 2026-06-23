@@ -69,9 +69,10 @@ jobs:
           except Exception as e:
               check("beep() draait zonder exception", False, str(e))
 
-          # Mac-standaard sneltoetsen
-          check("default dicteer-hotkey = ctrl_r", dictate._DEFAULT_HOTKEY == "ctrl_r", "-> " + str(dictate._DEFAULT_HOTKEY))
-          check("default vertaal-hotkey = alt_r", dictate._DEFAULT_TRANSLATE_HOTKEY == "alt_r", "-> " + str(dictate._DEFAULT_TRANSLATE_HOTKEY))
+          # Mac-standaard sneltoetsen (rechter Ctrl bestaat niet op Mac → rechter Option)
+          check("default dicteer-hotkey = alt_r", dictate._DEFAULT_HOTKEY == "alt_r", "-> " + str(dictate._DEFAULT_HOTKEY))
+          check("default command-hotkey = shift_r", dictate._DEFAULT_COMMAND_HOTKEY == "shift_r", "-> " + str(dictate._DEFAULT_COMMAND_HOTKEY))
+          check("default vertaal-hotkey = ctrl+alt", dictate._DEFAULT_TRANSLATE_HOTKEY == "ctrl+alt", "-> " + str(dictate._DEFAULT_TRANSLATE_HOTKEY))
 
           # paste_text aanwezig (Mac-tak gebruikt Cmd+V)
           check("paste_text() gedefinieerd", callable(dictate.paste_text))
