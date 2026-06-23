@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.10"
+APP_VERSION = "1.8.11"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -903,7 +903,9 @@ def set_autostart(on: bool):
 
 
 def toggle_autostart(icon_, item):
-    set_autostart(not is_autostart())
+    new = not is_autostart()
+    set_autostart(new)
+    dictate.save_env_value("DICTATE_AUTOSTART_OPTOUT", "0" if new else "1")  # keuze onthouden
     refresh()
 
 
@@ -1616,8 +1618,10 @@ def open_dashboard(start_tab="instellingen"):
         dictate.save_env_value("DICTATE_HISTORY", "1" if state["history"] else "0")
         if autostart_supported():
             _want = g_autostart()
-            if _want is not None and _want != is_autostart():
-                set_autostart(_want)
+            if _want is not None:
+                dictate.save_env_value("DICTATE_AUTOSTART_OPTOUT", "0" if _want else "1")  # keuze onthouden
+                if _want != is_autostart():
+                    set_autostart(_want)
         rebuild_hotkeys()
         if icon:
             state["last"] = "Instellingen opgeslagen ✓"
@@ -3049,6 +3053,16 @@ def main():
                 _show_mac_permissions_window(_acc_ok, _inp_ok)
         except Exception as e:
             print(f"  (permissie-check overgeslagen: {e})")
+
+    # Autostart STANDAARD aan: bij login meteen actief. Eenmalig inschakelen tenzij
+    # de gebruiker 'm bewust heeft uitgezet (DICTATE_AUTOSTART_OPTOUT=1).
+    if autostart_supported() and os.environ.get("DICTATE_AUTOSTART_OPTOUT", "").lower() not in ("1", "true", "yes"):
+        try:
+            if not is_autostart():
+                set_autostart(True)
+                print("  Autostart: standaard ingeschakeld (uit te zetten via tray/Instellingen)")
+        except Exception as e:
+            print(f"  (autostart aanzetten overgeslagen: {e})")
 
     icon = pystray.Icon("lazytype", ICONS["idle"], "Lazytype", build_menu())
     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
