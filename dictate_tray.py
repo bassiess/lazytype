@@ -44,7 +44,7 @@ from pynput.keyboard import Key
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
 
-APP_VERSION = "1.8.9"
+APP_VERSION = "1.8.10"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -833,9 +833,16 @@ def autostart_supported():
 
 
 def _program_args():
-    """Het commando om de tool te starten — gebouwde app of python-script."""
+    """Het commando om de tool bij login te starten — gebouwde app of python-script."""
     if getattr(sys, "frozen", False):
-        return [str(Path(sys.executable).resolve())]
+        exe = Path(sys.executable).resolve()
+        # macOS: start de .app via LaunchServices ('open <app>') i.p.v. de losse
+        # Mach-O. De binary rechtstreeks starten wordt door Gatekeeper geweigerd bij
+        # een niet-interactieve login-start en verliest de app-context (TCC-rechten
+        # mic/invoerbewaking). 'open' respecteert de eerdere goedkeuring + rechten.
+        if IS_MAC and exe.parent.name == "MacOS" and exe.parents[2].suffix == ".app":
+            return ["/usr/bin/open", str(exe.parents[2])]
+        return [str(exe)]
     if IS_WIN:
         exe = Path(sys.executable)
         pyw = exe.with_name("pythonw.exe")
