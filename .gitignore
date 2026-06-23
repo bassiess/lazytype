@@ -33,3 +33,4 @@ snippets.txt
 site/downloads/sha256.txt
 modes.json
 usage.jsonl
+lazytype.log*

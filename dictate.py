@@ -29,6 +29,8 @@ import time
 import wave
 import subprocess
 import threading
+import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 IS_WIN = sys.platform.startswith("win")
@@ -111,6 +113,39 @@ if getattr(sys, "frozen", False):
             (ROOT / ".env").write_text("\n".join(_lines) + "\n", encoding="utf-8")
 else:
     ROOT = Path(__file__).resolve().parent
+
+
+# ── Logging ─────────────────────────────────────────────────────────────
+# De gebouwde app draait --windowed (geen console) → print() is onzichtbaar.
+# Daarom een roterend logbestand in ROOT, plus stderr (zichtbaar in dev). Dit
+# is dé manier om veldfouten te diagnosticeren zonder dat de gebruiker een
+# crash-rapport hoeft te plakken.
+LOG_FILE = ROOT / "lazytype.log"
+log = logging.getLogger("lazytype")
+
+
+def _setup_logging():
+    if log.handlers:
+        return log
+    log.setLevel(logging.INFO)
+    log.propagate = False
+    fmt = logging.Formatter("%(asctime)s %(levelname)s: %(message)s", "%Y-%m-%d %H:%M:%S")
+    try:
+        fh = RotatingFileHandler(LOG_FILE, maxBytes=512 * 1024, backupCount=2, encoding="utf-8")
+        fh.setFormatter(fmt)
+        log.addHandler(fh)
+    except Exception:
+        pass
+    try:
+        sh = logging.StreamHandler()
+        sh.setFormatter(fmt)
+        log.addHandler(sh)
+    except Exception:
+        pass
+    return log
+
+
+_setup_logging()
 
 
 # ── .env laden (zonder externe dependency) ──────────────────────────────

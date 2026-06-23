@@ -4,9 +4,12 @@
 # Op macOS trekken pynput en pystray automatisch de benodigde pyobjc-frameworks mee.
 # Tk (voor het key-venster) zit in de python.org-installer; bij Homebrew: `brew install python-tk`.
 
-sounddevice>=0.5
-pynput>=1.8
-pyperclip>=1.11
-requests>=2.32
-pystray>=0.19
-Pillow>=10
+# Upper bounds: laat patches/minor toe, maar blokkeer een major-bump die de build
+# stilletjes kan breken (bewust upgraden = bound ophogen). Huidige werkende set:
+# sounddevice 0.5.5 · pynput 1.8.2 · pyperclip 1.11.0 · requests 2.34.2 · pystray 0.19.5 · Pillow 12.2.0
+sounddevice>=0.5,<0.6
+pynput>=1.8,<2.0
+pyperclip>=1.11,<2.0
+requests>=2.32,<3.0
+pystray>=0.19,<0.20
+Pillow>=10,<13

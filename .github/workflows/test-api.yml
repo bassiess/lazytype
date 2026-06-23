@@ -1,0 +1,38 @@
+name: Test API
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ['site/api/**', '.github/workflows/test-api.yml', '.github/scripts/api_smoke.py']
+  pull_request:
+    branches: [master]
+    paths: ['site/api/**']
+
+jobs:
+  lint-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: PHP-lint alle API-bestanden
+        run: |
+          err=0
+          for f in site/api/*.php; do
+            echo "== php -l $f"
+            php -l "$f" || err=1
+          done
+          test $err -eq 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Live API smoke-tests (nette foutcodes + optionele managed-test)
+        run: python .github/scripts/api_smoke.py
+        env:
+          LAZYTYPE_LICENSE_SECRET: ${{ secrets.LAZYTYPE_LICENSE_SECRET }}

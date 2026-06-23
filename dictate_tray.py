@@ -43,8 +43,29 @@ from pynput.keyboard import Key
 
 IS_WIN = dictate.IS_WIN
 IS_MAC = dictate.IS_MAC
+log = dictate.log
 
-APP_VERSION = "1.8.14"
+
+# Onafgevangen fouten (ook op threads) naar het logbestand i.p.v. spoorloos
+# verdwijnen in de --windowed-app. Zo is élke crash achteraf te diagnosticeren.
+def _excepthook(exc_type, exc, tb):
+    try: log.error("Onafgevangen fout", exc_info=(exc_type, exc, tb))
+    except Exception: pass
+    sys.__excepthook__(exc_type, exc, tb)
+
+
+def _thread_excepthook(args):
+    try: log.error("Onafgevangen thread-fout", exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+    except Exception: pass
+
+
+sys.excepthook = _excepthook
+try:
+    threading.excepthook = _thread_excepthook   # Python 3.8+
+except Exception:
+    pass
+
+APP_VERSION = "1.8.15"
 _update_info = None  # None = geen update beschikbaar / niet gecontroleerd; str = nieuwere versie
 
 # Live-ticker: rapporteer woordtelling na elke transcriptie (fire-and-forget).
@@ -474,6 +495,7 @@ def handle_release():
         if not is_undo and state.get("history"):
             dictate.add_history(text)
     except Exception as e:
+        log.exception("handle_release fout")
         print(f"  ⚠️  {e}")
         state["last"] = f"Fout: {e}"
         threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
@@ -533,6 +555,7 @@ def apply_mode(idx: int, matchers):
         if state.get("history"):
             dictate.add_history(result)
     except Exception as e:
+        log.exception("apply_mode fout")
         print(f"  ⚠️ mode: {e}")
         state["last"] = f"Fout: {e}"
         threading.Thread(target=lambda: dictate.beep("error"), daemon=True).start()
@@ -730,6 +753,7 @@ def on_press(key):
             if not any(key in m for m in active):
                 arm["aborted"] = True
     except Exception as e:
+        log.exception("on_press fout")
         print(f"on_press error: {e}")
 
 
@@ -752,6 +776,7 @@ def on_release(key):
         set_phase("working")
         threading.Thread(target=handle_release, daemon=True).start()
     except Exception as e:
+        log.exception("on_release fout")
         print(f"on_release error: {e}")
 
 
@@ -1922,6 +1947,7 @@ def open_dashboard(start_tab="instellingen"):
         ("Autostart", ("aan" if is_autostart() else "uit") if autostart_supported() else "n.v.t."),
         ("Apparaat-id", dictate.ensure_device_id()),
         ("Config-map", str(dictate.ROOT)),
+        ("Logbestand", str(dictate.LOG_FILE)),
         ("Laatste dictaat", (state.get("last_dictation") or "—")),
     ]
 
@@ -2191,6 +2217,18 @@ def open_stats(icon_=None, item=None):
         threading.Thread(target=_mac, daemon=True).start()
         return
     threading.Thread(target=lambda: _run_settings_window("statistieken"), daemon=True).start()
+
+
+def open_log(icon_=None, item=None):
+    """Open het logbestand (voor support/diagnose) in de standaard-editor."""
+    p = str(dictate.LOG_FILE)
+    try:
+        if IS_WIN:
+            os.startfile(p)                       # opent in Kladblok
+        elif IS_MAC:
+            subprocess.run(["open", p], check=False)
+    except Exception as e:
+        log.warning("kon logbestand niet openen: %s", e)
 
 
 def run_onboarding():
@@ -2687,6 +2725,7 @@ def build_menu():
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Statistieken…", open_stats),
         pystray.MenuItem("Instellingen…", open_settings),
+        pystray.MenuItem("Logbestand openen…", open_log),
         pystray.MenuItem("Abonnement-sleutel invoeren…", set_license_action),
         pystray.MenuItem("API-key instellen…", set_key_action),
         pystray.MenuItem("Automatisch starten", toggle_autostart,
@@ -3235,6 +3274,8 @@ def main():
     if IS_WIN:   # luister naar een 2e start → toon instellingen i.p.v. duplicaat
         threading.Thread(target=_watch_open_settings, daemon=True).start()
 
+    log.info("Lazytype %s gestart — platform=%s engine=%s taal=%s",
+             APP_VERSION, sys.platform, state["engine"], state["language"])
     print("=" * 58)
     print("  🎙️  Lazytype (systeemvak) is actief")
     print(f"  Engine     : {state['engine']}")
