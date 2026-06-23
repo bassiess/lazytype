@@ -66,12 +66,16 @@ jobs:
           mkdir -p dmg_stage
           cp -R dist/Lazytype.app dmg_stage/
           ln -s /Applications dmg_stage/Applications
-          hdiutil create \
-            -volname "Lazytype" \
-            -srcfolder dmg_stage \
-            -fs HFS+ \
-            -ov -format UDZO \
-            dist/Lazytype.dmg
+          # hdiutil geeft op CI-runners soms transient 'Resource busy' → retry.
+          for i in 1 2 3 4 5; do
+            rm -f dist/Lazytype.dmg
+            if hdiutil create -volname "Lazytype" -srcfolder dmg_stage \
+                 -fs HFS+ -ov -format UDZO dist/Lazytype.dmg; then
+              echo "DMG gemaakt (poging $i)"; break
+            fi
+            echo "hdiutil poging $i mislukt — 5s wachten en opnieuw…"; sleep 5
+          done
+          test -f dist/Lazytype.dmg
 
       - name: Kopieer naar site/downloads
         run: |
