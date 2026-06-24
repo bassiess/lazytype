@@ -90,6 +90,8 @@ def _report_words(n: int) -> None:
 def _check_update():
     """Achtergrond-check of er een nieuwe versie beschikbaar is op lazytype.com."""
     global _update_info
+    if dictate.IS_PACKAGED:
+        return  # Microsoft Store regelt updates; geen eigen zelf-updater bij MSIX
     try:
         import requests
         r = requests.get("https://lazytype.com/version.json", timeout=8)
@@ -878,6 +880,8 @@ def _program_args():
 
 
 def is_autostart():
+    if dictate.IS_PACKAGED:
+        return True  # MSIX: standaard aan via StartupTask in het manifest (beheer via Windows-instellingen)
     if IS_WIN:
         import winreg
         try:
@@ -892,6 +896,8 @@ def is_autostart():
 
 
 def set_autostart(on: bool):
+    if dictate.IS_PACKAGED:
+        return  # MSIX: autostart wordt door het StartupTask-manifest + Windows-instellingen beheerd, niet via HKCU\Run
     if IS_WIN:
         import winreg
         cmd = " ".join(f'"{a}"' for a in _program_args())
@@ -928,6 +934,13 @@ def set_autostart(on: bool):
 
 
 def toggle_autostart(icon_, item):
+    if dictate.IS_PACKAGED:
+        # MSIX: niet via register maar via Windows-instellingen → Opstart-apps.
+        try:
+            os.startfile("ms-settings:startupapps")
+        except Exception as e:
+            log.warning("kon Windows-instellingen (Opstart-apps) niet openen: %s", e)
+        return
     new = not is_autostart()
     set_autostart(new)
     dictate.save_env_value("DICTATE_AUTOSTART_OPTOUT", "0" if new else "1")  # keuze onthouden
@@ -959,6 +972,8 @@ def _win_install_integration():
     """Eenmalig (frozen Windows): Start-menu-snelkoppeling + vermelding in
     Geïnstalleerde apps, zodat Lazytype tussen je programma's staat i.p.v. alleen
     een tray-icoon. Respecteert een eerdere registratie via DICTATE_REGISTERED."""
+    if dictate.IS_PACKAGED:
+        return  # MSIX: Store regelt Start-menu + Geïnstalleerde apps + uninstall
     if not (IS_WIN and getattr(sys, "frozen", False)):
         return
     if os.environ.get("DICTATE_REGISTERED", "").lower() in ("1", "true", "yes"):

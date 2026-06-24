@@ -36,6 +36,27 @@ from pathlib import Path
 IS_WIN = sys.platform.startswith("win")
 IS_MAC = sys.platform == "darwin"
 
+
+def _detect_packaged():
+    """True als de app als MSIX-pakket draait (Microsoft Store). Dan zijn HKCU-
+    autostart, eigen install-integratie en de zelf-updater niet van toepassing
+    (gevirtualiseerd/overbodig) — de Store regelt installeren + updaten."""
+    if not IS_WIN:
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+        length = wintypes.UINT(0)
+        # GetCurrentPackageFullName: APPMODEL_ERROR_NO_PACKAGE (15700) als NIET verpakt;
+        # ERROR_INSUFFICIENT_BUFFER (122) als wél verpakt (we geven een nul-buffer mee).
+        rc = ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(length), None)
+        return rc != 15700
+    except Exception:
+        return False
+
+
+IS_PACKAGED = _detect_packaged()
+
 # Forceer UTF-8 op de uitvoer, anders crasht print() met emoji/pijltjes op een
 # cp1252-console (standaard op Nederlandse Windows).
 for _stream in (sys.stdout, sys.stderr):
