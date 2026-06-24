@@ -42,6 +42,22 @@ jobs:
             dictate_tray.py
           test -f dist/Lazytype.exe && echo "exe gebouwd"
 
+      - name: Bouw onedir-variant (voor MSIX — onefile faalt onder MSIX)
+        shell: bash
+        run: |
+          # PyInstaller --onefile pakt zichzelf bij start uit naar %TEMP%; dat faalt
+          # in de MSIX/AppX-container (lokaal getest: app start niet). --onedir legt
+          # alles uitgevouwen in het pakket → werkt wél. Aparte work/spec-paden zodat
+          # deze build de onefile-build niet vervuilt.
+          ICON_ARG=""
+          [ -f icon.ico ] && ICON_ARG="--icon=icon.ico"
+          python -m PyInstaller --noconfirm --onedir --windowed \
+            $ICON_ARG --name=Lazytype \
+            --add-data "site/version.json;." \
+            --distpath dist_onedir --workpath build_onedir --specpath build_onedir \
+            dictate_tray.py
+          test -f dist_onedir/Lazytype/Lazytype.exe && echo "onedir gebouwd"
+
       # ── MSIX-pakket voor de Microsoft Store (Microsoft her-ondertekent zelf;
       #    geen certificaat nodig, nooit een SmartScreen-waarschuwing) ───────────
       - name: Maak MSIX-pakket (Microsoft Store)
@@ -55,7 +71,8 @@ jobs:
           $ver4 = "$ver.0"
           $stage = "msix_stage"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item dist/Lazytype.exe "$stage/Lazytype.exe"
+          # onedir-uitvoer (Lazytype.exe + _internal\) in de pakketroot leggen
+          Copy-Item "dist_onedir/Lazytype/*" $stage -Recurse -Force
           Copy-Item -Recurse -Force packaging/Assets "$stage/Assets"
           $idName  = if ($env:MSIX_IDENTITY_NAME)     { $env:MSIX_IDENTITY_NAME }     else { "Lazytype.Lazytype" }
           $pub     = if ($env:MSIX_PUBLISHER)         { $env:MSIX_PUBLISHER }         else { "CN=Lazytype" }

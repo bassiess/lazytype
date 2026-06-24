@@ -9,7 +9,9 @@ models/
 # Python / PyInstaller
 __pycache__/
 build/
+build_onedir/
 dist/
+dist_onedir/
 *.spec
 tray-preview.png
 icon-preview.png
