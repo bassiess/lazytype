@@ -3147,6 +3147,21 @@ def main():
         prev.save(here / "icon-preview.png")
         print("app-icons gemaakt: icon.ico, icon.icns, icon-preview.png "
               "(site-favicons ongemoeid gelaten)")
+        # MSIX-assets (Microsoft Store-build) — zelfde squircle in de vereiste maten
+        try:
+            assets = here / "packaging" / "Assets"
+            assets.mkdir(parents=True, exist_ok=True)
+            for nm, sz in [("Square44x44Logo", 44), ("Square71x71Logo", 71),
+                           ("Square150x150Logo", 150), ("Square310x310Logo", 310),
+                           ("StoreLogo", 50)]:
+                render_icon(accent, size=sz, shape="squircle").save(assets / f"{nm}.png")
+            wide = Image.new("RGBA", (310, 150), (0, 0, 0, 0))
+            ic = render_icon(accent, size=130, shape="squircle")
+            wide.paste(ic, ((310 - 130) // 2, (150 - 130) // 2), ic)
+            wide.save(assets / "Wide310x150Logo.png")
+            print(f"MSIX-assets gemaakt in {assets}")
+        except Exception as e:
+            print(f"(MSIX-assets overgeslagen: {e})")
         return
 
     if "--settings" in sys.argv:

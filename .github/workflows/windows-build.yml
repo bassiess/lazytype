@@ -42,6 +42,32 @@ jobs:
             dictate_tray.py
           test -f dist/Lazytype.exe && echo "exe gebouwd"
 
+      # ── MSIX-pakket voor de Microsoft Store (Microsoft her-ondertekent zelf;
+      #    geen certificaat nodig, nooit een SmartScreen-waarschuwing) ───────────
+      - name: Maak MSIX-pakket (Microsoft Store)
+        shell: pwsh
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY: ${{ vars.MSIX_PUBLISHER_DISPLAY }}
+        run: |
+          $ver  = (Get-Content site/version.json -Raw | ConvertFrom-Json).version
+          $ver4 = "$ver.0"
+          $stage = "msix_stage"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item dist/Lazytype.exe "$stage/Lazytype.exe"
+          Copy-Item -Recurse -Force packaging/Assets "$stage/Assets"
+          $idName  = if ($env:MSIX_IDENTITY_NAME)     { $env:MSIX_IDENTITY_NAME }     else { "Lazytype.Lazytype" }
+          $pub     = if ($env:MSIX_PUBLISHER)         { $env:MSIX_PUBLISHER }         else { "CN=Lazytype" }
+          $pubDisp = if ($env:MSIX_PUBLISHER_DISPLAY) { $env:MSIX_PUBLISHER_DISPLAY } else { "Lazytype" }
+          (Get-Content packaging/AppxManifest.xml -Raw).Replace("__VERSION__",$ver4).Replace("__IDENTITY_NAME__",$idName).Replace("__PUBLISHER__",$pub).Replace("__PUBLISHER_DISPLAY__",$pubDisp) | Set-Content "$stage/AppxManifest.xml" -Encoding utf8
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $makeappx) { throw "makeappx.exe niet gevonden in de Windows SDK" }
+          Write-Host "makeappx: $($makeappx.FullName)"
+          & $makeappx.FullName pack /d $stage /p dist/Lazytype.msix /o
+          if (-not (Test-Path dist/Lazytype.msix)) { throw "MSIX niet gemaakt" }
+          Write-Host ("MSIX gemaakt: {0:N0} bytes" -f (Get-Item dist/Lazytype.msix).Length)
+
       # ── Ondertekenen — alleen als de Azure-signing-secrets gezet zijn ──────────
       - name: Signing-config aanwezig?
         id: cfg
@@ -97,5 +123,6 @@ jobs:
           name: Lazytype-Windows
           path: |
             dist/Lazytype.exe
+            dist/Lazytype.msix
             dist/sha256.txt
           retention-days: 90

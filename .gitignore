@@ -34,3 +34,8 @@ site/downloads/sha256.txt
 modes.json
 usage.jsonl
 lazytype.log*
+
+# MSIX-build (gegenereerd; manifest in packaging/ blijft wél getrackt)
+packaging/Assets/
+msix_stage/
+*.msix
