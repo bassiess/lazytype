@@ -51,10 +51,12 @@ jobs:
           # deze build de onefile-build niet vervuilt.
           ICON_ARG=""
           [ -f icon.ico ] && ICON_ARG="--icon=icon.ico"
+          # NB: geen --specpath (dat verschuift het --add-data-bronpad); alleen een
+          # apart --workpath zodat deze build de onefile-build niet vervuilt.
           python -m PyInstaller --noconfirm --onedir --windowed \
             $ICON_ARG --name=Lazytype \
             --add-data "site/version.json;." \
-            --distpath dist_onedir --workpath build_onedir --specpath build_onedir \
+            --distpath dist_onedir --workpath build_onedir \
             dictate_tray.py
           test -f dist_onedir/Lazytype/Lazytype.exe && echo "onedir gebouwd"
 
